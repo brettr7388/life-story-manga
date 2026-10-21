@@ -32,6 +32,7 @@ const SCHEMA = {
   type: 'object',
   properties: {
     title: { type: 'string' },
+    pronoun: { type: 'string', enum: ['he', 'she', 'they'] },
     pages: {
       type: 'array',
       minItems: PAGES,
@@ -48,28 +49,34 @@ const SCHEMA = {
       },
     },
   },
-  required: ['title', 'pages'],
+  required: ['title', 'pronoun', 'pages'],
 };
 
 const SYSTEM = `You write short, heartfelt manga scripts about a real person's life. You get five answers from them.
 Write exactly ${PAGES} pages that tell their story in order: 1 childhood and roots, 2 growing up, 3 the turning point,
 4 the struggle after it, 5 the proud achievement, 6 looking ahead (end on hope).
+"pronoun": "he" or "she" when the name or the answers make it clear, "they" only when it is truly unclear.
 Each page has:
-- "panels": exactly 3 visual descriptions for three stacked panels (top, middle, bottom), each 12 to 25 words.
+- "panels": exactly 3 visual descriptions for three stacked panels (top, middle, bottom), each 12 to 30 words.
   Describe only what we SEE: setting, action, camera angle (close-up, wide shot, low angle), emotion on the face.
-  Call the main character "the hero". Never mention signs, posters, banners, books with titles, newspapers,
-  screens, menus, labels, letters, numbers or any writing. Never put words or speech bubbles in a panel.
+  Call the main character "the hero". Every panel is a full scene; never describe an empty or blank panel.
+  Anyone else who appears gets a short, distinct look EVERY time they appear: age, build, hair, clothes,
+  for example "the hero's father, a stocky bald man in his sixties with a gray mustache and oil-stained overalls".
+  Make them look clearly unlike the hero (different age, hair, build). Keep other people to one or two per panel.
+  Never mention signs, posters, banners, book covers, newspapers, screens, menus, labels, letters, numbers or any
+  writing. Never put words or speech bubbles in a panel.
 - "caption": one full narration sentence of 10 to 18 words (60 to 110 characters), warm and specific to their answers.
   Narrate in the third person and call the person by the NAME they gave, on every page, the same way every time.
-  Use he, she or they only after the name. Never use "you", "your", "I", "my", "me", "we" or "our" in a caption.
+  After the name use the "pronoun" you chose (his, her, him, himself, herself); never "they" or "their" for the
+  hero unless "pronoun" is "they". Never use "you", "your", "I", "my", "me", "we" or "our" in a caption.
 - "speech": one line the hero says out loud, 4 to 10 words, first person is fine.
 - "speechPanel": 1, 2 or 3, the panel where the hero says that line. That panel must show the hero's face
   close enough to be speaking, and the line must fit what happens in that panel.
-Example page for someone named Mia:
+Example page for someone named Mia whose answers say she:
 {"panels": ["Wide shot of a rainy harbor at dawn, fishing boats rocking, gulls overhead",
  "Close-up of the hero, age eight, sketching on a receipt roll at a cluttered workbench, tongue out in focus",
- "Low angle of the hero's father lifting a boat engine while the hero looks up at him, grinning"],
- "caption": "Every morning the harbor smelled of salt and diesel, and Mia drew all of it.",
+ "Low angle of the hero's father, a tall thin man in his forties with a shaved head and a thick wool sweater, lifting a boat engine while the hero looks up at him, grinning"],
+ "caption": "Every morning the harbor smelled of salt and diesel, and Mia drew all of it in her notebook.",
  "speech": "Dad, one day I'll draw the whole sea!",
  "speechPanel": 3}
 Use the person's real details. Do not invent tragedies they did not mention. Keep it kind and PG.
@@ -97,12 +104,16 @@ export function parseScript(raw, name) {
     return { panels, caption: trim(p?.caption, 140), speech: trim(p?.speech, 80), speechPanel };
   });
   if (pages.some((p) => p.panels.length < 2 || !p.caption)) return null;
-  return { title: trim(obj.title, 60) || `The Story of ${name}`, pages };
+  const pronoun = ['he', 'she'].includes(String(obj.pronoun).toLowerCase()) ? String(obj.pronoun).toLowerCase() : 'they';
+  return { title: trim(obj.title, 60) || `The Story of ${name}`, pronoun, pages };
 }
 
 // Captions narrate in the third person with the person's name. These catch "you" / "I" narration.
 const OFF_VOICE = /\b(you|your|yours|yourself|you're|you've|you'll|you'd|i|i'm|i've|i'll|my|me|myself|we|our|us)\b/i;
-export const voiceOk = (script) => script.pages.every((p) => !OFF_VOICE.test(p.caption));
+// With a clear he/she, "they/their" in a caption is the model drifting into a vague voice.
+const THEY = /\b(they|their|theirs|them|themself|themselves)\b/i;
+export const voiceOk = (script) =>
+  script.pages.every((p) => !OFF_VOICE.test(p.caption) && (script.pronoun === 'they' || !THEY.test(p.caption)));
 
 // Last resort when the model keeps narrating in the second person: rewrite the common forms to the name.
 export function toThirdPerson(caption, name) {
@@ -139,7 +150,7 @@ export async function writeScript(ai, answers) {
 
 // Nouns that make FLUX letter the art. Each one is drawn blank instead.
 const LETTERED = /\b(signs?|signboards?|posters?|banners?|billboards?|newspapers?|headlines?|labels?|menus?|scoreboards?|placards?|plaques?|books?|notebooks?|letters?|notes?|screens?|monitors?|phones?|laptops?|t-shirts?|shirts?|jerseys?|certificates?|diplomas?|trophies|trophy|awards?)\b/gi;
-export const unletter = (s) => s.replace(LETTERED, (w) => `blank ${w}`).replace(/\bblank blank\b/gi, 'blank');
+export const unletter = (s) => s.replace(LETTERED, (w) => `wordless ${w}`).replace(/\bwordless wordless\b/gi, 'wordless');
 
 // Words the safety filter tends to flag; the soft retry drops them.
 const HEAVY = /\b(blood\w*|bleed\w*|wound\w*|injur\w*|hurt\w*|fight\w*|punch\w*|weapons?|guns?|knife|knives|fire|burn\w*|smok\w*|drunk|beer|wine|bar|naked|shirtless|bath\w*|bed|kiss\w*|cry\w*|cries|cried|tears?|sobb\w*|alone|lonely|dark\w*|storm\w*|hospital|funeral|death|dead|dying|grave|crash\w*|fall\w*|fell|struggl\w*|despair\w*|anger|angry|scream\w*|shout\w*|rage)\b/gi;
@@ -152,15 +163,17 @@ export function artPrompt(scene, refs, { speak = -1, soft = false } = {}) {
   const who = refs > 1 ? `the person shown in reference images 0 to ${refs - 1}` : 'the person shown in reference image 0';
   const panels = scene.map((s) => unletter(soft ? soften(s) : s).replace(/[^.!?]$/, '$&.'));
   return [
-    'A single black-and-white manga page, classic shonen/seinen style, bold clean ink lines, screentone shading,',
-    'high contrast, pure monochrome, no color at all.',
-    `The page is ${panels.length} full-width horizontal panels stacked from top to bottom, equal height, thick black borders, white gutters.`,
-    `The hero is ${who}: keep the same face, hairstyle, facial hair and glasses, drawn as a manga character.`,
+    'A silent, wordless black-and-white manga page told only in pictures, classic shonen/seinen style,',
+    'bold clean ink lines, screentone shading, high contrast, pure monochrome, no color at all.',
+    `The page is exactly ${panels.length} full-width horizontal panels stacked from top to bottom, equal height,`,
+    'thick black borders, white gutters. Every panel is fully drawn from border to border; no empty or blank panels, no extra panels.',
+    `The hero is ${who}: keep the same face, head shape, hair and any glasses or facial hair, drawn as a manga character.`,
+    'Only the hero comes from the reference images. Every other person is a different individual who looks clearly unlike',
+    'the hero, with their own face, age, build, hair and clothes as described, never a copy of the hero.',
     soft ? 'A gentle, wholesome, all-ages slice-of-life scene. Everyone is fully clothed, calm and hopeful.' : '',
-    ...panels.map((s, i) => `Panel ${i + 1} (${['top', 'middle', 'bottom'][i] ?? 'next'}): ${s}${i === speak ? ' The hero is talking here, face clearly visible, with empty sky or wall in the upper right of this panel.' : ''}`),
-    'The art has no writing of any kind: no letters, no words, no numbers, no page numbers, no title, no logo,',
-    'no Japanese or English characters, no speech bubbles, no captions, no sound effects, no signature, no watermark.',
-    'Every sign, poster, book, screen, paper and shirt in the picture is completely blank.',
+    ...panels.map((s, i) => `Panel ${i + 1} (${['top', 'middle', 'bottom'][i] ?? 'next'}): ${s}${i === speak ? " The hero's mouth is open mid-sentence." : ''}`),
+    'Pictures only: nothing is written anywhere on the page, no lettering, no page number, no title, no signature.',
+    'Shop fronts, book covers, papers, screens and clothes show only simple shapes and patterns. Plain white paper margins.',
   ].filter(Boolean).join(' ');
 }
 

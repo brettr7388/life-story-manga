@@ -92,6 +92,7 @@ a { color: inherit; }
 .speech[data-panel="1"] { top: 36%; }
 .speech::after { content: ""; position: absolute; left: 22%; bottom: -12px; border: 9px solid transparent; border-top: 14px solid var(--ink); border-bottom: 0; transform: skewX(-25deg); }
 .inking .caption, .inking .speech { opacity: .25; }
+.lettered .caption, .lettered .speech { display: none; } /* the shown PNG carries its own lettering */
 .inked .caption, .inked .speech { animation: pop .35s 1.4s both; }
 @keyframes pop { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
 

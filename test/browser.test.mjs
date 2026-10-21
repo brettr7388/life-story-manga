@@ -61,6 +61,31 @@ test('a 3030 on page 2 is retried once on the server with a softer prompt and th
     assert.deepEqual(p2, [{ page: 2, soft: false }, { page: 2, soft: true }]);
     assert.equal(s.calls.length, 7);
     assert.equal(await page.textContent('#status'), 'All six pages inked. Swipe to read.');
+
+    // Lettering: each bubble is inside the panel its line belongs to and off that panel's hatched "face";
+    // the reader shows the lettered PNG; the stray page number in the bottom margin is painted out.
+    const { layouts } = await page.evaluate(() => window.__manga());
+    const speech = [2, 3, 1, 2, 3, 1]; // the fake script's speechPanel per page (1-based)
+    layouts.forEach((l, i) => {
+      const k = speech[i] - 1;
+      const band = l.bands[k];
+      assert.equal(l.found, 3, `page ${i + 1}: three panels found`);
+      assert.ok(l.bubble.y + l.bubble.h <= band.bottom && l.bubble.y >= band.top - l.bubble.h * 0.36, `page ${i + 1}: bubble on panel ${k + 1}`);
+      const fx = (i + 1 + k) % 2 ? 480 : 70;
+      const face = { x: fx, y: band.top + 30, w: 260, h: 250 };
+      const hit = l.bubble.x < face.x + face.w && face.x < l.bubble.x + l.bubble.w && l.bubble.y < face.y + face.h && face.y < l.bubble.y + l.bubble.h;
+      assert.ok(!hit, `page ${i + 1}: bubble covers the face`);
+    });
+    const shown = await page.evaluate(() => [...document.querySelectorAll('.page img')].map((im) => im.src.slice(0, 5)));
+    assert.deepEqual(shown, Array(6).fill('blob:'));
+    const marginInk = await page.evaluate(async () => {
+      const bmp = await createImageBitmap(document.querySelector('.page img'));
+      const c = new OffscreenCanvas(bmp.width, bmp.height); const ctx = c.getContext('2d'); ctx.drawImage(bmp, 0, 0);
+      const d = ctx.getImageData(300, 998, 168, 22).data; let dark = 0;
+      for (let k = 0; k < d.length; k += 4) if (d[k] < 128) dark++;
+      return dark;
+    });
+    assert.equal(marginInk, 0, 'no page number left in the bottom margin');
   } finally { await browser.close(); }
 });
 

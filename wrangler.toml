@@ -9,7 +9,7 @@ enabled = true
 # The page and its sounds ship inside the Worker as modules (see src/static.js).
 [[rules]]
 type = "Text"
-globs = ["**/public/*.html", "**/public/*.css", "**/public/*.svg", "**/public/app.js", "**/public/audio.js"]
+globs = ["**/public/*.html", "**/public/*.css", "**/public/*.svg", "**/public/*.js"]
 fallthrough = false
 
 [[rules]]

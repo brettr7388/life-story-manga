@@ -32,7 +32,7 @@ test('parseAnswers strips control characters and caps length', () => {
 test('artPrompt names every reference image and forbids lettering', () => {
   const p = artPrompt(['one', 'two', 'three'], 4);
   assert.match(p, /reference images 0 to 3/);
-  assert.match(p, /no writing of any kind/);
+  assert.match(p, /nothing is written anywhere/);
 });
 
 test('page signatures verify only for the same run, page and panels', async () => {
@@ -53,8 +53,11 @@ test('speech is tied to a panel: speechPanel 1-3 becomes an index, clamped, defa
   const mk = (speechPanel) => ({ panels: ['a', 'b', 'c'], caption: 'Sam ran.', speech: 'hi', speechPanel });
   const at = (v) => parseScript({ title: 'T', pages: Array(6).fill(mk(v)) }, 'Sam').pages[0].speechPanel;
   assert.deepEqual([at(1), at(2), at(3), at(9), at(0), at(undefined)], [0, 1, 2, 2, 0, 2]);
-  assert.match(artPrompt(['x', 'y', 'z'], 1, { speak: 1 }), /Panel 2 \(middle\): y\. The hero is talking here/);
-  assert.doesNotMatch(artPrompt(['x', 'y', 'z'], 1), /talking here/);
+  const spoken = artPrompt(['x', 'y', 'z'], 1, { speak: 1 });
+  assert.match(spoken, /Panel 2 \(middle\): y\. The hero's mouth is open mid-sentence\./);
+  assert.doesNotMatch(artPrompt(['x', 'y', 'z'], 1), /mid-sentence/);
+  // These phrasings drew speech bubbles and empty white panels into the art; they must not come back.
+  assert.doesNotMatch(spoken, /talking here|empty sky|upper right|completely blank|speech bubble|Japanese/i);
 });
 
 test('captions keep one third-person voice with the name', () => {
@@ -63,16 +66,24 @@ test('captions keep one third-person voice with the name', () => {
   assert.equal(voiceOk(script('Theo grew up by the harbor, sketching every boat he saw.')), true);
   assert.equal(voiceOk(script('You grew up by the harbor.')), false);
   assert.equal(voiceOk(script('Theo told me about it.')), false);
+  const he = (c) => ({ ...script(c), pronoun: 'he' });
+  assert.equal(voiceOk(he('Theo honed their craft by the water.')), false, 'their, when the pronoun is clear');
+  assert.equal(voiceOk(he('Theo honed his craft by the water.')), true);
+  assert.equal(voiceOk({ ...script('Theo honed their craft.'), pronoun: 'they' }), true);
+  assert.equal(parseScript({ title: 'T', pronoun: 'She', pages: Array(6).fill(page('Ana ran.')) }, 'Ana').pronoun, 'she');
+  assert.equal(parseScript({ title: 'T', pronoun: 'it', pages: Array(6).fill(page('Ana ran.')) }, 'Ana').pronoun, 'they');
   assert.equal(toThirdPerson('You were eight when your dad gave you a pencil.', 'Theo Marsh'), "Theo was eight when Theo's dad gave Theo a pencil.");
   assert.equal(toThirdPerson('Now you are ready.', 'Theo'), 'Now Theo is ready.');
 });
 
 test('the art prompt fights lettering and the soft retry drops heavy words', () => {
-  assert.equal(unletter('A shop sign and a poster over books'), 'A shop blank sign and a blank poster over blank books');
+  assert.equal(unletter('A shop sign and a poster over books'), 'A shop wordless sign and a wordless poster over wordless books');
   const p = artPrompt(['The hero cries alone in the dark hospital'], 1, { soft: true });
   assert.doesNotMatch(p, /cries|alone|dark|hospital/);
   assert.match(p, /wholesome/);
-  assert.match(artPrompt(['x'], 1), /no page numbers/);
-  assert.match(artPrompt(['x'], 1), /completely blank/);
+  assert.match(artPrompt(['x'], 1), /no page number/);
+  assert.match(artPrompt(['x'], 1), /silent, wordless/);
+  assert.match(artPrompt(['x'], 1), /no empty or blank panels/);
+  assert.match(artPrompt(['x'], 1), /Only the hero comes from the reference images/);
   assert.equal(soften('The hero, crying, hugs a friend.'), 'The hero, hugs a friend.');
 });

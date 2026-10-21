@@ -1,4 +1,5 @@
 import { unlock, startMusic, turn, isMuted, setMuted } from './audio.js';
+import { toGrid, planPage } from './layout.js';
 
 const PAGES = 6;
 const MAX_PHOTOS = 4;
@@ -162,6 +163,7 @@ function closeReader() {
 }
 
 $('back').addEventListener('click', () => {
+  story?.pages.forEach((p) => p.shown && URL.revokeObjectURL(p.shown));
   story = null;
   closeReader();
   $('go').disabled = false;
@@ -205,13 +207,26 @@ async function drawOne(i) {
     if (!data.image) throw new Error('The artist smudged this page. Tap to redraw.');
     if (!story || story.run !== run) return;
     p.image = `data:image/jpeg;base64,${data.image}`;
-    const img = el.querySelector('img');
-    await loadImage(img, p.image, ctrl.signal);
+    const art = new Image();
+    await loadImage(art, p.image, ctrl.signal);
     if (!story || story.run !== run) return;
+    // Letter the page (caption, bubble) into one PNG now: the reader shows exactly what Save and Share give,
+    // and Share can call navigator.share inside the tap (iOS needs that).
+    const img = el.querySelector('img');
+    try {
+      p.png = await renderPage(i, art);
+      p.shown = URL.createObjectURL(p.png);
+      await loadImage(img, p.shown, ctrl.signal);
+      el.classList.add('lettered');
+    } catch (e) {
+      if (ctrl.signal.aborted) throw e;
+      console.warn('lettering failed, showing the bare page', e);
+      p.png = dataUrlBlob(p.image);
+      await loadImage(img, p.image, ctrl.signal);
+      el.classList.remove('lettered');
+    }
     el.classList.remove('inking');
     el.classList.add('inked');
-    // Render the shareable PNG now, so Share can call navigator.share inside the tap (iOS needs that).
-    p.png = await renderPage(i).catch(() => dataUrlBlob(p.image));
     p.state = 'done';
   } catch (err) {
     if (!story || story.run !== run) return;
@@ -311,47 +326,57 @@ function wrap(ctx, text, maxWidth) {
   return lines;
 }
 
-async function renderPage(i) {
+async function renderPage(i, art) {
   const p = story.pages[i];
-  const img = pageEl(i).querySelector('img');
-  const W = img.naturalWidth, H = img.naturalHeight;
+  const W = art.naturalWidth, H = art.naturalHeight;
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-  ctx.filter = 'grayscale(1) contrast(1.08)';
-  ctx.drawImage(img, 0, 0, W, H);
-  ctx.filter = 'none';
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(art, 0, 0, W, H);
+  const grid = toGrid(ctx.getImageData(0, 0, W, H).data, W, H);
+
   const pad = W * 0.03;
   const font = Math.round(W * 0.032);
-  if (p.caption) {
-    ctx.font = `700 ${font}px system-ui, sans-serif`;
-    const lines = wrap(ctx, p.caption, W * 0.62);
-    const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + pad * 1.4;
-    const bh = lines.length * font * 1.25 + pad;
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(3, W * 0.005);
-    ctx.fillRect(pad, pad, bw, bh); ctx.strokeRect(pad, pad, bw, bh);
-    ctx.fillStyle = '#000';
-    lines.forEach((l, k) => ctx.fillText(l, pad * 1.7, pad + font * (1.05 + k * 1.25)));
+  const line = font * 1.25;
+  ctx.font = `700 ${font}px system-ui, sans-serif`;
+  const capLines = p.caption ? wrap(ctx, p.caption, W * 0.6) : [];
+  const capBox = capLines.length ? { w: Math.max(...capLines.map((l) => ctx.measureText(l).width)) + pad * 1.4, h: capLines.length * line + pad } : null;
+  ctx.font = `800 ${font}px system-ui, sans-serif`;
+  const spLines = p.speech ? wrap(ctx, p.speech, W * 0.42) : [];
+  const textW = spLines.length ? Math.max(...spLines.map((l) => ctx.measureText(l).width)) : 0;
+  const textH = spLines.length * line;
+  // The ellipse that holds the text: its bounding box is what gets placed.
+  const bubBox = spLines.length ? { w: (textW + pad * 2) * 1.16, h: (textH + pad * 1.2) * 1.45 } : null;
+
+  const plan = planPage(grid, { width: W, height: H, caption: capBox, bubble: bubBox, speechPanel: p.speechPanel ?? 2 });
+  p.layout = plan;
+
+  ctx.filter = 'grayscale(1) contrast(1.08)';
+  ctx.drawImage(art, 0, 0, W, H);
+  ctx.filter = 'none';
+  ctx.fillStyle = '#fff';
+  if (plan.margins.top > 0) ctx.fillRect(0, 0, W, plan.margins.top);
+  if (plan.margins.bottom < H) ctx.fillRect(0, plan.margins.bottom, W, H - plan.margins.bottom);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(3, W * 0.005);
+
+  if (plan.caption) {
+    const { x, y, w, h } = plan.caption;
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h); ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = '#000'; ctx.font = `700 ${font}px system-ui, sans-serif`;
+    capLines.forEach((l, k) => ctx.fillText(l, x + pad * 0.7, y + pad * 0.5 + font * 1.05 + k * line));
   }
-  if (p.speech) {
-    ctx.font = `800 ${font}px system-ui, sans-serif`;
-    const lines = wrap(ctx, p.speech, W * 0.5);
-    const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + pad * 2;
-    const bh = lines.length * font * 1.25 + pad * 1.2;
-    // The page is three stacked panels; the bubble sits in the upper right of the panel where the line is said
-    // (for the top panel, its lower right, clear of the caption), with a tail pointing into that panel.
-    const k = Math.min(Math.max(p.speechPanel ?? 2, 0), 2);
-    const band = H / 3;
-    const x = W - bw * 1.08 - pad * 1.4;
-    const y = k === 0 ? band - bh - pad * 2.2 : band * k + pad * 2.2;
-    const cx = x + bw / 2, cy = y + bh / 2, rx = bw / 1.75, ry = bh / 1.4;
-    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(3, W * 0.005);
-    ctx.beginPath(); ctx.moveTo(cx - rx * 0.35, cy + ry * 0.6); ctx.lineTo(cx - rx * 0.9, cy + ry * 1.5); ctx.lineTo(cx - rx * 0.05, cy + ry * 0.75); ctx.closePath();
+  if (plan.bubble) {
+    const { x, y, w, h } = plan.bubble;
+    const cx = x + w / 2, cy = y + h / 2, rx = w / 2, ry = h / 2;
+    const dir = plan.tail.toward === 'left' ? -1 : 1, vy = plan.tail.down ? 1 : -1;
+    const tip = { x: cx + dir * rx * 0.75, y: cy + vy * ry * 1.6 };
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(cx + dir * rx * 0.15, cy + vy * ry * 0.7); ctx.lineTo(tip.x, tip.y); ctx.lineTo(cx + dir * rx * 0.5, cy + vy * ry * 0.55); ctx.closePath();
     ctx.fill(); ctx.stroke();
     ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cx - rx * 0.33, cy + ry * 0.55); ctx.lineTo(cx - rx * 0.07, cy + ry * 0.7); ctx.lineTo(cx - rx * 0.2, cy + ry * 0.95); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#000'; ctx.textAlign = 'center';
-    lines.forEach((l, k) => ctx.fillText(l, x + bw / 2, y + pad * 0.6 + font * (0.95 + k * 1.25)));
+    ctx.beginPath(); ctx.moveTo(cx + dir * rx * 0.13, cy + vy * ry * 0.62); ctx.lineTo(cx + dir * rx * 0.52, cy + vy * ry * 0.48); ctx.lineTo(cx + dir * rx * 0.3, cy + vy * ry * 0.95); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.textAlign = 'center'; ctx.font = `800 ${font}px system-ui, sans-serif`;
+    spLines.forEach((l, k) => ctx.fillText(l, cx, cy - textH / 2 + font * 0.95 + k * line));
     ctx.textAlign = 'start';
   }
   const small = Math.round(font * 0.6);
@@ -361,7 +386,7 @@ async function renderPage(i) {
   ctx.fillRect(pad * 0.6, H - small * 1.9, ctx.measureText(label).width + small, small * 1.5);
   ctx.fillStyle = '#000';
   ctx.fillText(label, pad * 0.6 + small / 2, H - small * 0.75);
-  return new Promise((res) => c.toBlob(res, 'image/png'));
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('could not encode the page'))), 'image/png'));
 }
 
 const fileName = (i) => `${(story.title || 'manga').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-page-${i + 1}.png`;
@@ -390,4 +415,7 @@ $('share').addEventListener('click', () => {
 });
 
 loadStatus();
-window.__manga = () => ({ current, title: story?.title, states: story?.pages.map((p) => p.state) ?? [], status: $('status').textContent });
+window.__manga = () => ({
+  current, title: story?.title, states: story?.pages.map((p) => p.state) ?? [], status: $('status').textContent,
+  layouts: story?.pages.map((p) => p.layout ?? null) ?? [],
+});

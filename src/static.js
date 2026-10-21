@@ -4,6 +4,7 @@
 import indexHtml from '../public/index.html';
 import appJs from '../public/app.js';
 import audioJs from '../public/audio.js';
+import layoutJs from '../public/layout.js';
 import styleCss from '../public/style.css';
 import favicon from '../public/favicon.svg';
 import music from '../public/audio/music.mp3';
@@ -15,6 +16,7 @@ export const FILES = {
   '/': { body: indexHtml, type: HTML, cache: 'no-cache' },
   '/app.js': { body: appJs, type: JS, cache: 'no-cache' },
   '/audio.js': { body: audioJs, type: JS, cache: 'no-cache' },
+  '/layout.js': { body: layoutJs, type: JS, cache: 'no-cache' },
   '/style.css': { body: styleCss, type: 'text/css; charset=utf-8', cache: 'no-cache' },
   '/favicon.svg': { body: favicon, type: 'image/svg+xml', cache: 'public, max-age=86400' },
   '/audio/music.mp3': { body: music, type: 'audio/mpeg', cache: 'public, max-age=86400' },

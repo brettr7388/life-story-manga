@@ -51,7 +51,7 @@ before(async () => {
         modulesRoot: '.',
         scriptPath: 'src/worker.js',
         modulesRules: [
-          { type: 'Text', include: ['**/public/*.html', '**/public/*.css', '**/public/*.svg', '**/public/app.js', '**/public/audio.js'], fallthrough: false },
+          { type: 'Text', include: ['**/public/*.html', '**/public/*.css', '**/public/*.svg', '**/public/*.js'], fallthrough: false },
           { type: 'Data', include: ['**/*.mp3'], fallthrough: false },
           { type: 'ESModule', include: ['**/*.js'] },
         ],

@@ -5,12 +5,17 @@ import { readFileSync } from 'node:fs';
 import { Miniflare } from 'miniflare';
 import sharp from 'sharp';
 
+// Placeholder art shaped like the real thing: three stacked panels, a dense hatched "face" in each
+// (alternating sides), a page label, and a stray page number in the bottom margin that lettering should clear.
+const hatch = (x, y) => Array.from({ length: 22 }, (_, k) => `<line x1="${x}" y1="${y + k * 10}" x2="${x + 220}" y2="${y + k * 10 + 30}" stroke="#000" stroke-width="3"/>`).join('');
 const pages = await Promise.all([1, 2, 3, 4, 5, 6].map(async (n) => {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024"><rect width="768" height="1024" fill="#fff"/>
-    <rect x="24" y="24" width="720" height="460" fill="#ddd" stroke="#000" stroke-width="10"/>
-    <rect x="24" y="508" width="350" height="492" fill="#bbb" stroke="#000" stroke-width="10"/>
-    <rect x="394" y="508" width="350" height="492" fill="#999" stroke="#000" stroke-width="10"/>
-    <text x="384" y="290" font-size="120" font-family="sans-serif" font-weight="900" text-anchor="middle">PAGE ${n}</text></svg>`;
+  const panels = [[24, 330], [354, 660], [684, 990]].map(([t, b], k) => {
+    const fx = (n + k) % 2 ? 480 : 70;
+    return `<rect x="24" y="${t}" width="720" height="${b - t}" fill="#e6e6e6" stroke="#000" stroke-width="8"/>${hatch(fx, t + 40)}`;
+  }).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="768" height="1024"><rect width="768" height="1024" fill="#fff"/>${panels}
+    <text x="384" y="520" font-size="90" font-family="sans-serif" font-weight="900" text-anchor="middle">PAGE ${n}</text>
+    <text x="384" y="1012" font-size="14" font-family="sans-serif" text-anchor="middle">${n + 12}</text></svg>`;
   return (await sharp(Buffer.from(svg)).jpeg().toBuffer()).toString('base64');
 }));
 
@@ -38,8 +43,7 @@ export class AI extends WorkerEntrypoint {
     console.log('fake-image ' + JSON.stringify({ page: pageNo, soft: prompt.includes('wholesome') }));
     if (pageNo === HANG_PAGE && hangsLeft-- > 0) await new Promise((r) => setTimeout(r, 600_000)); // a timer, so workerd does not cancel it as hung
     if (pageNo === FLAG_PAGE && flagsLeft-- > 0) throw new Error('3030: Your output has been flagged. Please choose another prompt / input image combination');
-    const n = Number(form.get('seed')) % 6;
-    return { image: IMAGES[n] };
+    return { image: IMAGES[(pageNo - 1) % 6] ?? IMAGES[0] };
   }
 }
 export default { fetch: () => new Response('fake ai') };`;
@@ -53,7 +57,7 @@ const mf = new Miniflare({
       modulesRoot: '.',
       scriptPath: 'src/worker.js',
       modulesRules: [
-        { type: 'Text', include: ['**/public/*.html', '**/public/*.css', '**/public/*.svg', '**/public/app.js', '**/public/audio.js'], fallthrough: false },
+        { type: 'Text', include: ['**/public/*.html', '**/public/*.css', '**/public/*.svg', '**/public/*.js'], fallthrough: false },
         { type: 'Data', include: ['**/*.mp3'], fallthrough: false },
         { type: 'ESModule', include: ['**/*.js'] },
       ],

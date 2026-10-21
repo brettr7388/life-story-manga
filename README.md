@@ -50,6 +50,14 @@ anything else on the account. On the free plan, going past 10,000 makes the mode
 app refuse first, cleanly, before a story is half drawn. Raise the cap only on a paid plan, where each manga
 costs about $0.009.
 
+## Lettering
+
+The art is asked for as a silent, wordless page of three stacked panels. The phone letters it: it finds the
+real panels from the white gutters, puts the caption in the emptier top corner and the speech bubble on the
+emptiest spot of the panel where the line is said (few lines, little ink, away from the middle where close-up
+faces sit), and paints the paper margins white so stray page numbers disappear. The reader shows that
+lettered PNG, the same file Save and Share hand over.
+
 ## Sound
 
 Music and the page-turn are `<audio>` elements, started inside the first tap, the approach that plays on
@@ -98,6 +106,7 @@ src/sign.js       HMAC page signatures
 src/jpeg.js       reads JPEG width/height to enforce the 512x512 limit
 src/static.js     the page and sounds, bundled into the Worker as Text and Data modules
 public/           the page: index.html, app.js, audio.js, style.css, audio/*.mp3
+public/layout.js  where the caption and bubble go, read from the drawn page's own pixels
 migrations/       D1 schema
 scripts/          sound builder, offline dev server, e2e recorder
 test/             node --test suites
