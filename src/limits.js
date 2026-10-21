@@ -1,7 +1,7 @@
 // The daily cap and the per-manga drawing budget, both enforced in D1 with single atomic statements.
 //
 // Why 8 a day: the account is on Workers Free, which includes 10,000 Workers AI neurons per day.
-// One manga costs about 990 neurons (see README, "Daily cap"), so 8 mangas use about 7,900 and leave
+// One manga costs about 800 neurons (measured, see README "Daily cap"), so 8 mangas use about 6,400 and leave
 // room for page retries and the account's other Workers. Past 10,000 the free plan refuses AI calls;
 // the cap makes us refuse first, with a clear message, instead of failing halfway through a story.
 export const DEFAULT_DAILY_CAP = 8;

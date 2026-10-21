@@ -32,18 +32,19 @@ It is one Cloudflare Worker on the free plan:
 before calling any model, and the page says to come back after midnight UTC. Each manga may draw at most
 9 pages (6 plus 3 redraws of failed pages).
 
-Why 8: Workers Free includes 10,000 Workers AI neurons a day, and resets at 00:00 UTC. From the
-[pricing table](https://developers.cloudflare.com/workers-ai/platform/pricing/):
+Why 8: Workers Free includes 10,000 Workers AI neurons a day, and resets at 00:00 UTC. Measured on the
+live Worker (Cloudflare's AI analytics, Oct 21 2026):
 
-| Step | Cost |
+| Step | Measured |
 | --- | --- |
-| Script: about 900 input + 1,000 output tokens on Llama 3.3 70B fp8-fast (26,668 / 204,805 neurons per M) | about 230 neurons |
-| One page: 768x1024 output = 4 tiles x 26.05, plus up to 4 references x 5.37 | about 126 neurons |
-| One manga: script + 6 pages | about 990 neurons |
+| Script: 481 input + 482 output tokens on Llama 3.3 70B fp8-fast | 112 neurons |
+| One page: 768x1024 with 2 reference photos on FLUX.2 [klein] 4B | 114 neurons |
+| One manga: script + 6 pages | about 800 neurons |
 
-8 mangas use about 7,900 neurons, leaving about 2,000 for redraws and anything else on the account. On the
-free plan, going past 10,000 makes the models refuse; the cap makes the app refuse first, cleanly, before a
-story is half drawn. Raise the cap only on a paid plan, where each manga costs about $0.011.
+8 mangas use about 6,400 neurons, which leaves room for redraws (up to 3 per manga, about 340 more) and
+anything else on the account. On the free plan, going past 10,000 makes the models refuse; the cap makes the
+app refuse first, cleanly, before a story is half drawn. Raise the cap only on a paid plan, where each manga
+costs about $0.009.
 
 ## Sound
 

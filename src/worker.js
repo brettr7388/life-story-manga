@@ -75,10 +75,9 @@ async function page(request, env) {
     const f = form.get(`photo${i}`);
     if (!f || typeof f === 'string') continue;
     if (f.size > MAX_PHOTO_BYTES) return json({ error: 'A photo is too large.' }, 413);
-    const bytes = new Uint8Array(await f.arrayBuffer());
-    const size = jpegSize(bytes);
+    const size = jpegSize(new Uint8Array(await f.slice(0, 65536).arrayBuffer())); // the SOF marker is near the start
     if (!size || size.width >= 512 || size.height >= 512) return json({ error: 'Photos must be JPEGs under 512x512.' }, 400);
-    photos.push(new Blob([bytes], { type: 'image/jpeg' }));
+    photos.push(f);
   }
   if (!photos.length) return json({ error: 'Add at least one photo.' }, 400);
 
@@ -90,7 +89,7 @@ async function page(request, env) {
     const image = await drawPage(env.AI, artPrompt(panels, photos.length), photos, seed);
     return json({ page: index, image });
   } catch (e) {
-    console.log('image model error', e?.message);
+    console.log('image model error', index, e?.message);
     return json({ error: 'The artist smudged this page. Tap to redraw.' }, 502);
   }
 }

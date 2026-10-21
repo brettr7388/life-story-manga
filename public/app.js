@@ -193,7 +193,7 @@ async function drawOne(i) {
   photos.forEach((ph, k) => fd.append(`photo${k}`, ph.blob, `photo${k}.jpg`));
   try {
     const res = await fetch('/api/page', { method: 'POST', body: fd });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
     if (!res.ok) throw new Error(data.error || 'failed');
     if (!story || story.run !== run) return;
     p.image = `data:image/jpeg;base64,${data.image}`;
@@ -208,6 +208,7 @@ async function drawOne(i) {
   } catch (err) {
     if (!story || story.run !== run) return;
     p.state = 'failed';
+    (window.__pageErrors ??= []).push({ page: i + 1, error: err.message });
     el.classList.remove('inking');
     el.classList.add('failed');
     const btn = el.querySelector('.redraw');

@@ -54,11 +54,18 @@ const SYSTEM = `You write short, heartfelt manga scripts about a real person's l
 Write exactly ${PAGES} pages that tell their story in order: 1 childhood and roots, 2 growing up, 3 the turning point,
 4 the struggle after it, 5 the proud achievement, 6 looking ahead (end on hope).
 Each page has:
-- "panels": exactly 3 visual descriptions, one per panel, each under 25 words. Describe only what we SEE: setting,
+- "panels": exactly 3 visual descriptions, one per panel, each 12 to 25 words. Describe only what we SEE: setting,
   action, camera angle (close-up, wide shot, low angle), emotion on the face. Call the main character "the hero".
   Never put words, signs, letters or speech bubbles in a panel description.
-- "caption": one narration line under 110 characters, in second person or the hero's name, warm and specific.
-- "speech": one short line the hero says or thinks, under 60 characters.
+- "caption": one full narration sentence of 10 to 18 words (60 to 110 characters), in second person or using
+  the person's name, warm and specific to their answers.
+- "speech": one line the hero says or thinks, 4 to 10 words.
+Example page:
+{"panels": ["Wide shot of a rainy harbor at dawn, fishing boats rocking, gulls overhead",
+ "Close-up of the hero, age eight, sketching on a receipt roll at a cluttered workbench, tongue out in focus",
+ "Low angle of the hero's father lifting a boat engine, grinning down at the hero"],
+ "caption": "Every morning the harbor smelled of salt and diesel, and you drew all of it.",
+ "speech": "One day I'll draw the whole sea!"}
 Use the person's real details. Do not invent tragedies they did not mention. Keep it kind and PG.
 "title" is a 2 to 5 word manga title. Reply with JSON only.`;
 
@@ -109,7 +116,7 @@ export function artPrompt(scene, refs) {
     `The page has ${scene.length} panels in a dynamic layout with thick black borders and white gutters.`,
     `The hero is ${who}: keep the same face, hairstyle, facial hair and glasses, drawn as a manga character.`,
     ...scene.map((s, i) => `Panel ${i + 1}: ${s}`),
-    'No text, no letters, no speech bubbles, no captions, no sound effects, no watermark.',
+    'No text, no letters, no Japanese characters, no speech bubbles, no captions, no sound effects, no signs with writing, no watermark.',
   ].join(' ');
 }
 

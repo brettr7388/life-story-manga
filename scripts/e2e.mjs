@@ -76,8 +76,20 @@ mark('first page inking in');
 await page.waitForTimeout(700);
 await shot(page, '04-ink-in-progress.png');
 const pageTimes = {};
-await page.waitForFunction(() => (window.__manga().states || []).every((s) => s === 'done' || s === 'failed'), null, { timeout: 300_000, polling: 250 }).catch(() => {});
+const settled = () => page.waitForFunction(() => (window.__manga().states || []).every((s) => s === 'done' || s === 'failed'), null, { timeout: 300_000, polling: 250 }).catch(() => {});
+await settled();
+// A page the model failed on gets a "Tap to redraw" button, as a person would use it (3 redraws per manga).
+let redraws = 0;
+for (let round = 0; round < 3; round++) {
+  const failed = await page.evaluate(() => window.__manga().states.map((s, i) => (s === 'failed' ? i : -1)).filter((i) => i >= 0));
+  if (!failed.length) break;
+  mark(`redrawing pages ${failed.map((i) => i + 1).join(', ')}`);
+  for (const i of failed) { await page.locator('.page').nth(i).locator('.redraw').evaluate((b) => b.click()); redraws++; }
+  await page.waitForTimeout(300);
+  await settled();
+}
 const states = await page.evaluate(() => window.__manga().states);
+const pageErrors = await page.evaluate(() => window.__pageErrors ?? []);
 const tAll = Date.now();
 mark(`pages finished: ${JSON.stringify(states)}`);
 await page.waitForTimeout(1800);
@@ -104,6 +116,7 @@ async function swipe(name) {
 }
 const saved = [];
 async function save(i) {
+  if (await page.locator('#save').isDisabled()) { mark(`page ${i + 1} not saved: not drawn`); return; }
   const [dl] = await Promise.all([page.waitForEvent('download'), page.tap('#save')]);
   const f = join(OUT, `saved-page-${i + 1}.png`);
   await dl.saveAs(f);
@@ -138,6 +151,8 @@ const result = {
     tapToAllPages: (tAll - tTap) / 1000,
   },
   states,
+  redraws,
+  pageErrors,
   audio,
   audioBeforeTap: before,
   audioAfterTap,

@@ -3,6 +3,9 @@ main = "src/worker.js"
 compatibility_date = "2026-01-15"
 workers_dev = true
 
+[observability]
+enabled = true
+
 # The page and its sounds ship inside the Worker as modules (see src/static.js).
 [[rules]]
 type = "Text"
