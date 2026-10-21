@@ -1,0 +1,30 @@
+name = "life-story-manga"
+main = "src/worker.js"
+compatibility_date = "2026-01-15"
+workers_dev = true
+
+# The page and its sounds ship inside the Worker as modules (see src/static.js).
+[[rules]]
+type = "Text"
+globs = ["**/public/*.html", "**/public/*.css", "**/public/*.svg", "**/public/app.js", "**/public/audio.js"]
+fallthrough = false
+
+[[rules]]
+type = "Data"
+globs = ["**/*.mp3"]
+fallthrough = false
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "life-story-manga"
+# Paste the id printed by `npx wrangler d1 create life-story-manga`.
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+# Mangas per UTC day. See README, "Daily cap", before raising it.
+DAILY_CAP = "8"
+# SIGNING_KEY is a secret: `npx wrangler secret put SIGNING_KEY` with any long random string.

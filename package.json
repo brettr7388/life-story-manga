@@ -1,0 +1,26 @@
+{
+  "name": "life-story-manga",
+  "version": "0.1.0",
+  "description": "Four photos and five answers become a six-page black-and-white manga of your life. One Cloudflare Worker.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply life-story-manga --local",
+    "db:migrate:remote": "wrangler d1 migrations apply life-story-manga --remote",
+    "build:audio": "python3 scripts/build-audio.py",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node scripts/e2e.mjs"
+  },
+  "devDependencies": {
+    "miniflare": "^4.20260730.0",
+    "playwright": "^1.56.0",
+    "sharp": "^0.35.5",
+    "wrangler": "^4.40.0"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Life-Story Manga</title>
+<meta name="description" content="Four photos and five answers become a six-page black-and-white manga of your life.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<button id="sound" class="sound" type="button" aria-pressed="false" aria-label="Sound on">♪</button>
+
+<main id="form-screen" class="screen">
+  <header class="hero">
+    <p class="kicker">Vol. 1</p>
+    <h1>Your life,<br>in manga</h1>
+    <p class="lede">Up to 4 photos and 5 short answers. Six inked pages, about a minute later.</p>
+  </header>
+
+  <form id="form" novalidate>
+    <section class="card">
+      <h2>1. Photos of you</h2>
+      <p class="hint">Faces clear and well lit. They are shrunk on your phone, sent once to draw, and never saved.</p>
+      <div id="photos" class="photos">
+        <label class="add" id="add-photo">
+          <input id="photo-input" type="file" accept="image/*" multiple>
+          <span>+ Add photo</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="card" id="questions">
+      <h2>2. Your story</h2>
+    </section>
+
+    <p id="form-error" class="error" role="alert" hidden></p>
+    <button id="go" class="go" type="submit">Draw my manga</button>
+    <p id="quota" class="quota" aria-live="polite"></p>
+  </form>
+  <footer class="foot">Black-and-white pages drawn by FLUX.2 [klein] on Cloudflare Workers AI. Photos are never stored. <a href="https://github.com/brettr7388/life-story-manga">Source</a></footer>
+</main>
+
+<main id="reader" class="screen reader" hidden>
+  <header class="bar">
+    <button id="back" class="ghost" type="button" aria-label="Start over">←</button>
+    <h1 id="title">Writing your story…</h1>
+    <span id="counter" class="counter">1/6</span>
+  </header>
+  <div id="pager" class="pager" tabindex="0" aria-label="Manga pages, swipe to turn"></div>
+  <nav class="dots" id="dots" aria-hidden="true"></nav>
+  <footer class="actions">
+    <button id="save" class="ghost" type="button" disabled>Save page</button>
+    <button id="share" class="solid" type="button" disabled>Share page</button>
+  </footer>
+  <p id="status" class="status" aria-live="polite"></p>
+</main>
+</body>
+</html>
