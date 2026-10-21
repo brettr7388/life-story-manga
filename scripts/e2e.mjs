@@ -2,15 +2,17 @@
 //   BASE_URL=https://... OUT=out PHOTOS=a.jpg,b.jpg node scripts/e2e.mjs
 // Uses one of the day's mangas. Saves screenshots, a video, the six saved PNGs and timings.json in OUT.
 // Use stand-in photos (a generated or stock face), never someone's real photos, for tests.
+// ANSWERS_FILE=answers.json swaps in other answers. HEADED=1 runs a visible, unmuted, full-screen browser
+// (for screen + audio capture on an X display); result.json then logs the wall-clock time of each tap and swipe.
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, renameSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, renameSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:8799';
 const OUT = process.env.OUT ?? 'out';
 const PHOTOS = (process.env.PHOTOS ?? '').split(',').filter(Boolean);
 if (!PHOTOS.length) throw new Error('Set PHOTOS to one to four stand-in photo paths');
-const ANSWERS = {
+const ANSWERS = process.env.ANSWERS_FILE ? JSON.parse(readFileSync(process.env.ANSWERS_FILE, 'utf8')) : {
   name: 'Theo',
   roots: 'A windy harbor town where my dad fixed fishing boats and I drew comics on receipt paper',
   turn: 'At 19 I missed the last ferry home and ended up sleeping in an art school studio, then enrolled',
@@ -21,12 +23,15 @@ mkdirSync(OUT, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: join(OUT, name) });
 const log = [];
 const t0 = Date.now();
-const mark = (what) => { const s = ((Date.now() - t0) / 1000).toFixed(1); log.push({ t: Number(s), what }); console.log(`${s}s ${what}`); };
+const mark = (what) => { const s = ((Date.now() - t0) / 1000).toFixed(1); log.push({ t: Number(s), at: Date.now(), what }); console.log(`${s}s ${what}`); };
+const HEADED = process.env.HEADED === '1';
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(HEADED
+  ? { headless: false, ignoreDefaultArgs: ['--mute-audio'], args: ['--window-position=0,0', '--window-size=390,844', '--force-device-scale-factor=1', '--disable-features=DownloadBubble,DownloadBubbleV2'] }
+  : {});
 const context = await browser.newContext({
   viewport: { width: 390, height: 844 },
-  deviceScaleFactor: 2,
+  deviceScaleFactor: HEADED ? 1 : 2,
   isMobile: true,
   hasTouch: true,
   userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
@@ -34,6 +39,13 @@ const context = await browser.newContext({
   acceptDownloads: true,
 });
 const page = await context.newPage();
+if (HEADED) {
+  // Full screen hides the tab strip and address bar, so the display shows only the 390x844 page.
+  const win = await context.newCDPSession(page);
+  const { windowId } = await win.send('Browser.getWindowForTarget');
+  await win.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'fullscreen' } });
+  await page.waitForTimeout(5000); // let the "press Esc to exit full screen" notice fade before recording starts
+}
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -103,6 +115,7 @@ const audioLater = await page.evaluate(() => window.__audio());
 const cdp = await context.newCDPSession(page);
 const box = await page.locator('#pager').boundingBox();
 async function swipe(name) {
+  mark('swipe');
   const y = Math.round(box.y + box.height / 2);
   const x0 = Math.round(box.x + box.width * 0.85);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }] });
@@ -117,9 +130,21 @@ async function swipe(name) {
 const saved = [];
 async function save(i) {
   if (await page.locator('#save').isDisabled()) { mark(`page ${i + 1} not saved: not drawn`); return; }
-  const [dl] = await Promise.all([page.waitForEvent('download'), page.tap('#save')]);
   const f = join(OUT, `saved-page-${i + 1}.png`);
-  await dl.saveAs(f);
+  if (HEADED) {
+    // No download (its toast would sit on the recording): copy the lettered page the reader shows,
+    // which is the same PNG Save hands over, at its full size.
+    const url = await page.locator('.page').nth(i).locator('img').evaluate((img) => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext('2d').drawImage(img, 0, 0);
+      return c.toDataURL('image/png');
+    });
+    writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
+  } else {
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.tap('#save')]);
+    await dl.saveAs(f);
+  }
   saved.push(f);
 }
 await save(0);
