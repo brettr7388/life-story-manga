@@ -4,6 +4,9 @@ const PAGES = 6;
 const MAX_PHOTOS = 4;
 const MAX_SIDE = 496; // FLUX.2 [klein] on Workers AI needs reference images under 512x512
 const DRAW_CONCURRENCY = 2;
+// One page is at most two model calls on the server (a flagged page gets one soft retry), about 30 s.
+// Past this the request is abandoned and the page offers a redraw, so a lost connection can never leave it inking.
+const DRAW_TIMEOUT_MS = globalThis.__drawTimeoutMs ?? 90_000;
 
 const $ = (id) => document.getElementById(id);
 const photos = []; // { blob, url } — kept in memory only, dropped on "start over"
@@ -144,7 +147,7 @@ function openReader() {
         <button class="redraw" type="button" hidden>Tap to redraw</button>
       </div>
       <p class="folio">${i + 1}</p>`;
-    page.querySelector('.redraw').addEventListener('click', () => { story.pages[i].state = 'queued'; drawAll(); });
+    page.querySelector('.redraw').addEventListener('click', () => { if (story?.pages[i]?.state !== 'failed') return; story.pages[i].state = 'queued'; drawAll(); });
     pager.append(page);
     $('dots').append(document.createElement('i'));
   }
@@ -173,6 +176,7 @@ function fillText(i, p) {
   const sp = el.querySelector('.speech');
   cap.textContent = p.caption; cap.hidden = !p.caption;
   sp.textContent = p.speech; sp.hidden = !p.speech;
+  sp.dataset.panel = String(p.speechPanel ?? 2);
 }
 
 function status(msg) { $('status').textContent = msg; }
@@ -183,39 +187,64 @@ async function drawOne(i) {
   p.state = 'drawing';
   const el = pageEl(i);
   el.classList.add('inking');
-  el.classList.remove('failed');
+  el.classList.remove('failed', 'inked');
   el.querySelector('.redraw').hidden = true;
   const fd = new FormData();
   fd.append('run', run);
   fd.append('page', String(i));
   fd.append('panels', JSON.stringify(p.panels));
   fd.append('sig', p.sig);
+  fd.append('speak', String(p.speechPanel ?? 2));
   photos.forEach((ph, k) => fd.append(`photo${k}`, ph.blob, `photo${k}.jpg`));
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new DOMException('This page took too long. Tap to redraw.', 'TimeoutError')), DRAW_TIMEOUT_MS);
   try {
-    const res = await fetch('/api/page', { method: 'POST', body: fd });
-    const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    if (!res.ok) throw new Error(data.error || 'failed');
+    const res = await fetch('/api/page', { method: 'POST', body: fd, signal: ctrl.signal });
+    const data = await res.json().catch((e) => { if (ctrl.signal.aborted) throw e; return { error: `HTTP ${res.status}` }; });
+    if (!res.ok) throw Object.assign(new Error(data.error || 'The artist smudged this page. Tap to redraw.'), { code: data.code });
+    if (!data.image) throw new Error('The artist smudged this page. Tap to redraw.');
     if (!story || story.run !== run) return;
     p.image = `data:image/jpeg;base64,${data.image}`;
     const img = el.querySelector('img');
-    img.onload = () => {
-      el.classList.remove('inking');
-      el.classList.add('inked');
-      // Render the shareable PNG now, so Share can call navigator.share inside the tap (iOS needs that).
-      renderPage(i).then((png) => { p.png = png; p.state = 'done'; afterDraw(); });
-    };
-    img.src = p.image;
+    await loadImage(img, p.image, ctrl.signal);
+    if (!story || story.run !== run) return;
+    el.classList.remove('inking');
+    el.classList.add('inked');
+    // Render the shareable PNG now, so Share can call navigator.share inside the tap (iOS needs that).
+    p.png = await renderPage(i).catch(() => dataUrlBlob(p.image));
+    p.state = 'done';
   } catch (err) {
     if (!story || story.run !== run) return;
     p.state = 'failed';
-    (window.__pageErrors ??= []).push({ page: i + 1, error: err.message });
-    el.classList.remove('inking');
+    const message = ctrl.signal.aborted ? ctrl.signal.reason?.message ?? 'This page took too long. Tap to redraw.' : err?.message || 'Tap to redraw.';
+    (window.__pageErrors ??= []).push({ page: i + 1, error: message });
+    el.classList.remove('inking', 'inked');
     el.classList.add('failed');
     const btn = el.querySelector('.redraw');
     btn.hidden = false;
-    if (/used all/.test(err.message)) { btn.textContent = err.message; btn.disabled = true; }
-    afterDraw();
+    if (err?.code === 'draws') { btn.textContent = 'This manga has used all its drawings.'; btn.disabled = true; }
+  } finally {
+    clearTimeout(timer);
   }
+  afterDraw();
+}
+
+function loadImage(img, src, signal) {
+  return new Promise((resolve, reject) => {
+    const stop = () => reject(signal.reason ?? new Error('aborted'));
+    if (signal.aborted) return stop();
+    signal.addEventListener('abort', stop, { once: true });
+    img.onload = () => { signal.removeEventListener('abort', stop); resolve(); };
+    img.onerror = () => { signal.removeEventListener('abort', stop); reject(new Error('The page came back damaged. Tap to redraw.')); };
+    img.src = src;
+  });
+}
+
+function dataUrlBlob(url) {
+  const bin = atob(url.slice(url.indexOf(',') + 1));
+  const bytes = new Uint8Array(bin.length);
+  for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+  return new Blob([bytes], { type: 'image/jpeg' });
 }
 
 function afterDraw() {
@@ -309,9 +338,18 @@ async function renderPage(i) {
     const lines = wrap(ctx, p.speech, W * 0.5);
     const bw = Math.max(...lines.map((l) => ctx.measureText(l).width)) + pad * 2;
     const bh = lines.length * font * 1.25 + pad * 1.2;
-    const x = W - bw * 1.08 - pad * 1.4, y = H - bh - pad * 2.6; // the ellipse reaches past the text box
+    // The page is three stacked panels; the bubble sits in the upper right of the panel where the line is said
+    // (for the top panel, its lower right, clear of the caption), with a tail pointing into that panel.
+    const k = Math.min(Math.max(p.speechPanel ?? 2, 0), 2);
+    const band = H / 3;
+    const x = W - bw * 1.08 - pad * 1.4;
+    const y = k === 0 ? band - bh - pad * 2.2 : band * k + pad * 2.2;
+    const cx = x + bw / 2, cy = y + bh / 2, rx = bw / 1.75, ry = bh / 1.4;
     ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(3, W * 0.005);
-    ctx.beginPath(); ctx.ellipse(x + bw / 2, y + bh / 2, bw / 1.75, bh / 1.4, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - rx * 0.35, cy + ry * 0.6); ctx.lineTo(cx - rx * 0.9, cy + ry * 1.5); ctx.lineTo(cx - rx * 0.05, cy + ry * 0.75); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - rx * 0.33, cy + ry * 0.55); ctx.lineTo(cx - rx * 0.07, cy + ry * 0.7); ctx.lineTo(cx - rx * 0.2, cy + ry * 0.95); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#000'; ctx.textAlign = 'center';
     lines.forEach((l, k) => ctx.fillText(l, x + bw / 2, y + pad * 0.6 + font * (0.95 + k * 1.25)));
     ctx.textAlign = 'start';
@@ -352,4 +390,4 @@ $('share').addEventListener('click', () => {
 });
 
 loadStatus();
-window.__manga = () => ({ current, title: story?.title, states: story?.pages.map((p) => p.state) ?? [] });
+window.__manga = () => ({ current, title: story?.title, states: story?.pages.map((p) => p.state) ?? [], status: $('status').textContent });

@@ -84,15 +84,29 @@ async function page(request, env) {
   if (!(await takeDraw(env.DB, run))) return json({ error: 'This manga has used all its drawings.', code: 'draws' }, 429);
 
   const panels = JSON.parse(panelsRaw);
+  const at = Number.parseInt(String(form.get('speak') ?? ''), 10);
+  const speak = Number.isInteger(at) && at >= 0 && at < panels.length ? at : -1;
   const seed = Number.parseInt(run.replace(/-/g, '').slice(0, 7), 16) + index;
-  try {
-    const image = await drawPage(env.AI, artPrompt(panels, photos.length), photos, seed);
-    return json({ page: index, image });
-  } catch (e) {
-    console.log('image model error', index, e?.message);
-    return json({ error: 'The artist smudged this page. Tap to redraw.' }, 502);
+  // A page the safety filter flags (3030) is retried once with softer wording and a new seed.
+  // The retry is a second drawing, so it is taken from the same per-manga budget.
+  let soft = false;
+  for (;;) {
+    try {
+      const image = await drawPage(env.AI, artPrompt(panels, photos.length, { speak, soft }), photos, soft ? seed + 7919 : seed);
+      if (soft) console.log('image soft retry ok', index);
+      return json({ page: index, image, retried: soft });
+    } catch (e) {
+      const message = String(e?.message ?? e);
+      console.log('image model error', index, soft ? 'soft' : 'first', message);
+      if (soft || !isFlagged(message)) break;
+      if (!(await takeDraw(env.DB, run))) return json({ error: 'This manga has used all its drawings.', code: 'draws' }, 429);
+      soft = true;
+    }
   }
+  return json({ error: 'The artist smudged this page. Tap to redraw.' }, 502);
 }
+
+const isFlagged = (message) => /\b3030\b|flagged/i.test(message);
 
 export default {
   async fetch(request, env) {

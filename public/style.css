@@ -18,7 +18,7 @@ button:disabled { opacity: .4; cursor: default; }
 a { color: inherit; }
 
 .sound {
-  position: fixed; z-index: 20; top: calc(env(safe-area-inset-top) + 10px); right: 12px;
+  position: absolute; z-index: 20; top: calc(env(safe-area-inset-top) + 10px); right: 12px;
   width: 44px; height: 44px; border-radius: 50%; border: var(--line); background: #fff; font-size: 20px; font-weight: 800;
 }
 
@@ -86,10 +86,14 @@ a { color: inherit; }
 
 .caption, .speech { position: absolute; z-index: 2; margin: 0; font-weight: 700; line-height: 1.25; background: #fff; color: var(--ink); }
 .caption { top: 3%; left: 3%; max-width: 66%; padding: 6px 8px; border: 2px solid var(--ink); font-size: clamp(11px, 3.4vw, 15px); }
-.speech { bottom: 6%; right: 4%; max-width: 58%; padding: 10px 14px; border: 2px solid var(--ink); border-radius: 50%; text-align: center; font-weight: 800; font-size: clamp(11px, 3.4vw, 15px); }
+.speech { top: 69.5%; right: 4%; max-width: 58%; padding: 10px 14px; border: 2px solid var(--ink); border-radius: 50%; text-align: center; font-weight: 800; font-size: clamp(11px, 3.4vw, 15px); }
+/* the page is three stacked panels; the bubble sits in the panel where the line is said */
+.speech[data-panel="0"] { top: 31%; transform: translateY(-100%); }
+.speech[data-panel="1"] { top: 36%; }
+.speech::after { content: ""; position: absolute; left: 22%; bottom: -12px; border: 9px solid transparent; border-top: 14px solid var(--ink); border-bottom: 0; transform: skewX(-25deg); }
 .inking .caption, .inking .speech { opacity: .25; }
 .inked .caption, .inked .speech { animation: pop .35s 1.4s both; }
-@keyframes pop { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
 
 .redraw { position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%); min-height: 48px; border: var(--line); background: #fff; font-weight: 900; padding: 0 18px; }
 

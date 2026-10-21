@@ -42,8 +42,9 @@ const SCHEMA = {
           panels: { type: 'array', minItems: 3, maxItems: 3, items: { type: 'string' } },
           caption: { type: 'string' },
           speech: { type: 'string' },
+          speechPanel: { type: 'integer', minimum: 1, maximum: 3 },
         },
-        required: ['panels', 'caption', 'speech'],
+        required: ['panels', 'caption', 'speech', 'speechPanel'],
       },
     },
   },
@@ -54,18 +55,23 @@ const SYSTEM = `You write short, heartfelt manga scripts about a real person's l
 Write exactly ${PAGES} pages that tell their story in order: 1 childhood and roots, 2 growing up, 3 the turning point,
 4 the struggle after it, 5 the proud achievement, 6 looking ahead (end on hope).
 Each page has:
-- "panels": exactly 3 visual descriptions, one per panel, each 12 to 25 words. Describe only what we SEE: setting,
-  action, camera angle (close-up, wide shot, low angle), emotion on the face. Call the main character "the hero".
-  Never put words, signs, letters or speech bubbles in a panel description.
-- "caption": one full narration sentence of 10 to 18 words (60 to 110 characters), in second person or using
-  the person's name, warm and specific to their answers.
-- "speech": one line the hero says or thinks, 4 to 10 words.
-Example page:
+- "panels": exactly 3 visual descriptions for three stacked panels (top, middle, bottom), each 12 to 25 words.
+  Describe only what we SEE: setting, action, camera angle (close-up, wide shot, low angle), emotion on the face.
+  Call the main character "the hero". Never mention signs, posters, banners, books with titles, newspapers,
+  screens, menus, labels, letters, numbers or any writing. Never put words or speech bubbles in a panel.
+- "caption": one full narration sentence of 10 to 18 words (60 to 110 characters), warm and specific to their answers.
+  Narrate in the third person and call the person by the NAME they gave, on every page, the same way every time.
+  Use he, she or they only after the name. Never use "you", "your", "I", "my", "me", "we" or "our" in a caption.
+- "speech": one line the hero says out loud, 4 to 10 words, first person is fine.
+- "speechPanel": 1, 2 or 3, the panel where the hero says that line. That panel must show the hero's face
+  close enough to be speaking, and the line must fit what happens in that panel.
+Example page for someone named Mia:
 {"panels": ["Wide shot of a rainy harbor at dawn, fishing boats rocking, gulls overhead",
  "Close-up of the hero, age eight, sketching on a receipt roll at a cluttered workbench, tongue out in focus",
- "Low angle of the hero's father lifting a boat engine, grinning down at the hero"],
- "caption": "Every morning the harbor smelled of salt and diesel, and you drew all of it.",
- "speech": "One day I'll draw the whole sea!"}
+ "Low angle of the hero's father lifting a boat engine while the hero looks up at him, grinning"],
+ "caption": "Every morning the harbor smelled of salt and diesel, and Mia drew all of it.",
+ "speech": "Dad, one day I'll draw the whole sea!",
+ "speechPanel": 3}
 Use the person's real details. Do not invent tragedies they did not mention. Keep it kind and PG.
 "title" is a 2 to 5 word manga title. Reply with JSON only.`;
 
@@ -86,14 +92,35 @@ export function parseScript(raw, name) {
   if (!obj || !Array.isArray(obj.pages) || obj.pages.length < PAGES) return null;
   const pages = obj.pages.slice(0, PAGES).map((p) => {
     const panels = Array.isArray(p?.panels) ? p.panels.map((x) => trim(x, 220)).filter(Boolean).slice(0, 3) : [];
-    return { panels, caption: trim(p?.caption, 140), speech: trim(p?.speech, 80) };
+    const at = Number.parseInt(p?.speechPanel, 10);
+    const speechPanel = Number.isInteger(at) ? Math.min(Math.max(at, 1), panels.length || 1) - 1 : panels.length - 1;
+    return { panels, caption: trim(p?.caption, 140), speech: trim(p?.speech, 80), speechPanel };
   });
   if (pages.some((p) => p.panels.length < 2 || !p.caption)) return null;
   return { title: trim(obj.title, 60) || `The Story of ${name}`, pages };
 }
 
+// Captions narrate in the third person with the person's name. These catch "you" / "I" narration.
+const OFF_VOICE = /\b(you|your|yours|yourself|you're|you've|you'll|you'd|i|i'm|i've|i'll|my|me|myself|we|our|us)\b/i;
+export const voiceOk = (script) => script.pages.every((p) => !OFF_VOICE.test(p.caption));
+
+// Last resort when the model keeps narrating in the second person: rewrite the common forms to the name.
+export function toThirdPerson(caption, name) {
+  const n = name.split(' ')[0] || name;
+  const rules = [
+    [/\byou are\b|\byou're\b/gi, `${n} is`], [/\byou were\b/gi, `${n} was`], [/\byou have\b|\byou've\b/gi, `${n} has`],
+    [/\byou'll\b/gi, `${n} will`], [/\byou'd\b/gi, `${n} would`], [/\byourself\b/gi, 'themself'],
+    [/\byours\b/gi, `${n}'s`], [/\byour\b/gi, `${n}'s`], [/\byou\b/gi, n],
+    [/\bI am\b|\bI'm\b/g, `${n} is`], [/\bI was\b/g, `${n} was`], [/\bI\b/g, n], [/\bmy\b/gi, `${n}'s`], [/\bme\b/gi, n],
+  ];
+  let out = caption;
+  for (const [re, to] of rules) out = out.replace(re, to);
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
 export async function writeScript(ai, answers) {
   const messages = [{ role: 'system', content: SYSTEM }, { role: 'user', content: userPrompt(answers) }];
+  let fallback = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const out = await ai.run(TEXT_MODEL, {
       messages,
@@ -102,22 +129,39 @@ export async function writeScript(ai, answers) {
       response_format: { type: 'json_schema', json_schema: SCHEMA },
     });
     const script = parseScript(out?.response ?? out, answers.name);
-    if (script) return script;
+    if (!script) continue;
+    if (voiceOk(script)) return script;
+    fallback = script;
   }
-  return null;
+  if (fallback) fallback.pages.forEach((p) => { p.caption = toThirdPerson(p.caption, answers.name); });
+  return fallback;
 }
 
+// Nouns that make FLUX letter the art. Each one is drawn blank instead.
+const LETTERED = /\b(signs?|signboards?|posters?|banners?|billboards?|newspapers?|headlines?|labels?|menus?|scoreboards?|placards?|plaques?|books?|notebooks?|letters?|notes?|screens?|monitors?|phones?|laptops?|t-shirts?|shirts?|jerseys?|certificates?|diplomas?|trophies|trophy|awards?)\b/gi;
+export const unletter = (s) => s.replace(LETTERED, (w) => `blank ${w}`).replace(/\bblank blank\b/gi, 'blank');
+
+// Words the safety filter tends to flag; the soft retry drops them.
+const HEAVY = /\b(blood\w*|bleed\w*|wound\w*|injur\w*|hurt\w*|fight\w*|punch\w*|weapons?|guns?|knife|knives|fire|burn\w*|smok\w*|drunk|beer|wine|bar|naked|shirtless|bath\w*|bed|kiss\w*|cry\w*|cries|cried|tears?|sobb\w*|alone|lonely|dark\w*|storm\w*|hospital|funeral|death|dead|dying|grave|crash\w*|fall\w*|fell|struggl\w*|despair\w*|anger|angry|scream\w*|shout\w*|rage)\b/gi;
+export const soften = (s) =>
+  s.replace(HEAVY, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.])/g, '$1').replace(/,(\s*,)+/g, ',').replace(/^[\s,]+/, '').trim();
+
 // The art prompt sent to FLUX.2 [klein]. `refs` is how many reference photos came with the request.
-export function artPrompt(scene, refs) {
+// `speak` is the panel (0-2) where the hero speaks; `soft` is the gentler wording used to retry a flagged page.
+export function artPrompt(scene, refs, { speak = -1, soft = false } = {}) {
   const who = refs > 1 ? `the person shown in reference images 0 to ${refs - 1}` : 'the person shown in reference image 0';
+  const panels = scene.map((s) => unletter(soft ? soften(s) : s).replace(/[^.!?]$/, '$&.'));
   return [
     'A single black-and-white manga page, classic shonen/seinen style, bold clean ink lines, screentone shading,',
     'high contrast, pure monochrome, no color at all.',
-    `The page has ${scene.length} panels in a dynamic layout with thick black borders and white gutters.`,
+    `The page is ${panels.length} full-width horizontal panels stacked from top to bottom, equal height, thick black borders, white gutters.`,
     `The hero is ${who}: keep the same face, hairstyle, facial hair and glasses, drawn as a manga character.`,
-    ...scene.map((s, i) => `Panel ${i + 1}: ${s}`),
-    'No text, no letters, no Japanese characters, no speech bubbles, no captions, no sound effects, no signs with writing, no watermark.',
-  ].join(' ');
+    soft ? 'A gentle, wholesome, all-ages slice-of-life scene. Everyone is fully clothed, calm and hopeful.' : '',
+    ...panels.map((s, i) => `Panel ${i + 1} (${['top', 'middle', 'bottom'][i] ?? 'next'}): ${s}${i === speak ? ' The hero is talking here, face clearly visible, with empty sky or wall in the upper right of this panel.' : ''}`),
+    'The art has no writing of any kind: no letters, no words, no numbers, no page numbers, no title, no logo,',
+    'no Japanese or English characters, no speech bubbles, no captions, no sound effects, no signature, no watermark.',
+    'Every sign, poster, book, screen, paper and shirt in the picture is completely blank.',
+  ].filter(Boolean).join(' ');
 }
 
 // Draws one page. `photos` are JPEG Blobs, each under 512x512. Returns the base64 image string.

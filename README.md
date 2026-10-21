@@ -30,7 +30,11 @@ It is one Cloudflare Worker on the free plan:
 
 `DAILY_CAP` in `wrangler.toml` is **8 mangas per UTC day**. When it is reached, `/api/start` answers 429
 before calling any model, and the page says to come back after midnight UTC. Each manga may draw at most
-9 pages (6 plus 3 redraws of failed pages).
+9 drawings (6 pages plus 3 spare).
+
+When the image model's safety filter flags a page (error 3030), the Worker retries it once on its own with
+softer wording and a new seed. That retry is a drawing and comes out of the same 9. A page that still fails,
+or that gets no answer within 90 seconds (the browser gives up on the request), shows "Tap to redraw".
 
 Why 8: Workers Free includes 10,000 Workers AI neurons a day, and resets at 00:00 UTC. Measured on the
 live Worker (Cloudflare's AI analytics, Oct 21 2026):
@@ -59,8 +63,9 @@ Node 22.5 or newer.
 
 ```bash
 npm install
-npm test                      # Worker in Miniflare with a fake AI: pages, signatures, photo checks, cap, draw budget
+npm test                      # Worker in Miniflare with a fake AI, plus phone-size Chromium runs with a flagged and a hung page
 node scripts/dev-offline.mjs  # the real Worker on :8799 with a fake AI and grey placeholder pages
+                              # FAKE_FLAG_PAGE=2 FAKE_FLAG_TIMES=2 or FAKE_HANG_PAGE=1 inject model faults
 npx wrangler dev              # the real thing; Workers AI always runs remotely and counts against your neurons
 ```
 
