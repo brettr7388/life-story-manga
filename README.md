@@ -57,6 +57,16 @@ anything else on the account. On the free plan, going past 10,000 makes the mode
 app refuse first, cleanly, before a story is half drawn. Raise the cap only on a paid plan, where each manga
 costs about $0.009.
 
+## Story
+
+The text model writes one story, not six answers in a row. It first writes a one-line `plot`, a shared
+`setting` and a small `cast` (name + look), then six pages that follow one arc: setup, problem, rising action,
+climax, resolution, ending. Each page has a caption that moves the plot on, a speaker and a real line of
+dialogue, and three panels that show exactly that moment. Before signing, `/api/start` builds the art panels
+(`artPanels`): the setting on the first panel, each cast member's look wherever they appear, and the speaker in
+the bubble's panel. Panel text names the hero by role so the photos or look apply, and drops quoted words and
+weapon words (an axe becomes a saw). A script with filler lines (under 4 words, or repeated) is rewritten once.
+
 ## Lettering
 
 The art is asked for as a silent, wordless page of three stacked panels. The phone letters it: it finds the

@@ -9,7 +9,7 @@
 // Photos live only in the /api/page request: they go to the model and are never written anywhere.
 // D1 holds two counters (mangas per day, drawings per manga) and nothing about the person.
 import { PAGES, dailyCap, takeSlot, returnSlot, used, openRun, takeDraw, utcDay } from './limits.js';
-import { QUESTIONS, parseAnswers, writeScript, artPrompt, drawPage } from './story.js';
+import { QUESTIONS, parseAnswers, writeScript, artPanels, artPrompt, drawPage } from './story.js';
 import { signPage, verifyPage } from './sign.js';
 import { jpegSize } from './jpeg.js';
 import { serveStatic } from './static.js';
@@ -56,9 +56,13 @@ async function start(request, env) {
   const run = crypto.randomUUID();
   await openRun(env.DB, run, day);
   const pages = await Promise.all(
-    script.pages.map(async (p, i) => ({ ...p, sig: await signPage(env.SIGNING_KEY, run, i, scene(JSON.stringify(p.panels), answers.look)) })),
+    script.pages.map(async (p, i) => {
+      const panels = artPanels(p, script);
+      return { beat: p.beat, caption: p.caption, speaker: p.speaker, speech: p.speech, speechPanel: p.speechPanel, panels,
+        sig: await signPage(env.SIGNING_KEY, run, i, scene(JSON.stringify(panels), answers.look)) };
+    }),
   );
-  return json({ run, title: script.title, look: answers.look, pages });
+  return json({ run, title: script.title, plot: script.plot, look: answers.look, pages });
 }
 
 async function page(request, env) {
@@ -85,15 +89,13 @@ async function page(request, env) {
   if (!(await takeDraw(env.DB, run))) return json({ error: 'This manga has used all its drawings.', code: 'draws' }, 429);
 
   const panels = JSON.parse(panelsRaw);
-  const at = Number.parseInt(String(form.get('speak') ?? ''), 10);
-  const speak = Number.isInteger(at) && at >= 0 && at < panels.length ? at : -1;
   const seed = Number.parseInt(run.replace(/-/g, '').slice(0, 7), 16) + index;
   // A page the safety filter flags (3030) is retried once with softer wording and a new seed.
   // The retry is a second drawing, so it is taken from the same per-manga budget.
   let soft = false;
   for (;;) {
     try {
-      const image = await drawPage(env.AI, artPrompt(panels, photos.length, { speak, soft, look }), photos, soft ? seed + 7919 : seed);
+      const image = await drawPage(env.AI, artPrompt(panels, photos.length, { soft, look }), photos, soft ? seed + 7919 : seed);
       if (soft) console.log('image soft retry ok', index);
       return json({ page: index, image, retried: soft });
     } catch (e) {

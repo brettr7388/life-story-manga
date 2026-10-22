@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { jpegSize } from '../src/jpeg.js';
-import { parseScript, parseAnswers, artPrompt, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
+import { parseScript, parseAnswers, artPrompt, artPanels, artText, speakerPanel, speechOk, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
 import { signPage, verifyPage } from '../src/sign.js';
 import { dailyCap, DEFAULT_DAILY_CAP } from '../src/limits.js';
 
@@ -60,11 +60,40 @@ test('speech is tied to a panel: speechPanel 1-3 becomes an index, clamped, defa
   const mk = (speechPanel) => ({ panels: ['a', 'b', 'c'], caption: 'Sam ran.', speech: 'hi', speechPanel });
   const at = (v) => parseScript({ title: 'T', pages: Array(6).fill(mk(v)) }, 'Sam').pages[0].speechPanel;
   assert.deepEqual([at(1), at(2), at(3), at(9), at(0), at(undefined)], [0, 1, 2, 2, 0, 2]);
-  const spoken = artPrompt(['x', 'y', 'z'], 1, { speak: 1 });
-  assert.match(spoken, /Panel 2 \(middle\): y\. The hero's mouth is open mid-sentence, with open background beside the hero's head\./);
-  assert.doesNotMatch(artPrompt(['x', 'y', 'z'], 1), /mid-sentence/);
+});
+
+test('the bubble moves to a panel that shows the speaker, never a hands-only close-up', () => {
+  const panels = ['Wide shot of the village, snow falling', 'Medium shot of Sari laughing at the hero', "Close-up of the hero's hands holding a saw"];
+  assert.equal(speakerPanel(panels, 'the hero', 2), 1, 'hands-only panel is skipped for one that shows the hero');
+  assert.equal(speakerPanel(panels, 'Sari', 0), 1, 'the panel that names the speaker');
+  assert.equal(speakerPanel(panels, 'the hero', 1), 1, 'a good choice is kept');
+});
+
+test('art panels carry the setting, each cast look, and who is talking', () => {
+  const script = { setting: 'A snowy mountain village with wooden cabins', cast: [{ name: 'Sari', look: 'a little girl in a pink coat with pigtails' }], pages: [] };
+  const page = { panels: ['Wide shot of the hero in the square', 'Medium shot of Sari waving', 'Close-up of the hero smiling'], speaker: 'Sari', speech: 'Tung, the stove is cold!', speechPanel: 1 };
+  const [a, b, c] = artPanels(page, script);
+  assert.match(a, /^Setting: A snowy mountain village with wooden cabins\. Wide shot/);
+  assert.match(b, /Sari is a little girl in a pink coat with pigtails\. Sari is in this panel, talking, mouth open\./);
+  assert.doesNotMatch(c, /Setting|Sari|talking/);
   // These phrasings drew speech bubbles and empty white panels into the art; they must not come back.
-  assert.doesNotMatch(spoken, /talking here|empty sky|upper right|completely blank|speech bubble|Japanese/i);
+  const p = artPrompt([a, b, c], 0, { look: 'a log' });
+  assert.doesNotMatch(p, /talking here|empty sky|upper right|completely blank|speech bubble|Japanese|beside the hero's head/i);
+});
+
+test('panel text names the hero by role and drops quoted words, dangling "as he says" and axes', () => {
+  assert.equal(artText('Wide shot of the hero, Tung Tung Tung Sahur, splitting firewood with a big axe', 'Tung Tung Tung Sahur'), 'Wide shot of the hero splitting firewood with a big saw');
+  assert.equal(artText("Close-up of Tung's face, grinning, as he says", 'Tung Tung Tung Sahur'), "Close-up of the hero's face, grinning");
+  assert.equal(artText("Wide shot of Theo holding a sign that says 'Open'", 'Theo'), 'Wide shot of the hero holding a sign');
+  const s = parseScript({ title: 'T', pages: Array(6).fill({ panels: ['Theo waves', 'b', 'c'], caption: 'Theo ran.', speech: 'hi there you two' }) }, 'Theo');
+  assert.equal(s.pages[0].panels[0], 'the hero waves');
+});
+
+test('speech must be real lines: at least four words and none repeated', () => {
+  const mk = (lines) => ({ pages: lines.map((speech) => ({ speech })) });
+  assert.equal(speechOk(mk(['Sari, hold that end steady!', 'Why is everyone staring at me?', 'Grab the small branches first.', 'Just one more log to go!', 'Thank you all for helping today.', 'Pass the soup down here, Grandpa!'])), true);
+  assert.equal(speechOk(mk(['Feast time!', 'Why is everyone staring at me?', 'a b c d', 'e f g h', 'i j k l', 'm n o p'])), false);
+  assert.equal(speechOk(mk(Array(6).fill('We can do this together!'))), false);
 });
 
 test('captions keep one third-person voice with the name', () => {
@@ -77,6 +106,7 @@ test('captions keep one third-person voice with the name', () => {
   assert.equal(voiceOk(he('Theo honed their craft by the water.')), false, 'their, when the pronoun is clear');
   assert.equal(voiceOk(he('Theo honed his craft by the water.')), true);
   assert.equal(voiceOk({ ...script('Theo honed their craft.'), pronoun: 'they' }), true);
+  assert.equal(voiceOk(he('Theo and the kids printed their own zines.')), true, 'their, for a group');
   assert.equal(parseScript({ title: 'T', pronoun: 'She', pages: Array(6).fill(page('Ana ran.')) }, 'Ana').pronoun, 'she');
   assert.equal(parseScript({ title: 'T', pronoun: 'it', pages: Array(6).fill(page('Ana ran.')) }, 'Ana').pronoun, 'they');
   assert.equal(toThirdPerson('You were eight when your dad gave you a pencil.', 'Theo Marsh'), "Theo was eight when Theo's dad gave Theo a pencil.");

@@ -199,7 +199,6 @@ async function drawOne(i) {
   fd.append('page', String(i));
   fd.append('panels', JSON.stringify(p.panels));
   fd.append('sig', p.sig);
-  fd.append('speak', String(p.speechPanel ?? 2));
   if (story.look) fd.append('look', story.look);
   photos.forEach((ph, k) => fd.append(`photo${k}`, ph.blob, `photo${k}.jpg`));
   const ctrl = new AbortController();

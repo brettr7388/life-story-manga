@@ -31,8 +31,8 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 const IMAGES = ${JSON.stringify(pages)};
 const FLAG_PAGE = ${FLAG_PAGE}, HANG_PAGE = ${HANG_PAGE};
 let flagsLeft = ${FLAG_TIMES}, hangsLeft = 1;
-const page = (n) => ({ panels: ['wide shot of a town ' + n, 'close-up ' + n, 'hero smiles ' + n],
-  speechPanel: 1 + (n % 3), caption: 'Sam grew up where the sea met the sky, page ' + n + ' of a life worth drawing.', speech: 'This is only the start!' });
+const page = (n) => ({ panels: ['wide shot of the hero in a town ' + n, 'close-up ' + n + ' of the hero', 'the hero smiles ' + n],
+  speechPanel: 1 + (n % 3), caption: 'Sam grew up where the sea met the sky, page ' + n + ' of a life worth drawing.', speech: 'This is only page ' + n + ', Sam!' });
 export class AI extends WorkerEntrypoint {
   async run(model, input) {
     await new Promise((r) => setTimeout(r, model.includes('llama') ? 1500 : 2500 + Math.random() * 2000));

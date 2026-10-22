@@ -11,7 +11,7 @@ import { WorkerEntrypoint } from 'cloudflare:workers';
 const calls = [];
 let failText = false;
 let flags = 0; // the next N image calls throw the model's 3030 "flagged" error
-const page = (n) => ({ panels: ['Panel one of ' + n, 'Panel two of ' + n, 'Panel three of ' + n], caption: 'Caption ' + n, speech: 'Line ' + n });
+const page = (n) => ({ panels: ['Panel one of ' + n, 'Panel two of ' + n, 'Panel three of ' + n], caption: 'Caption ' + n, speech: 'This is line number ' + n });
 export class AI extends WorkerEntrypoint {
   async run(model, input) {
     if (model.includes('llama')) {
