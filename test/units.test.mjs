@@ -86,4 +86,5 @@ test('the art prompt fights lettering and the soft retry drops heavy words', () 
   assert.match(artPrompt(['x'], 1), /no empty or blank panels/);
   assert.match(artPrompt(['x'], 1), /Only the hero comes from the reference images/);
   assert.equal(soften('The hero, crying, hugs a friend.'), 'The hero, hugs a friend.');
+  assert.doesNotMatch(soften('The hero swings his baseball bat and bangs on a door'), /bat|bang/);
 });

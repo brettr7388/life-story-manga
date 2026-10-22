@@ -153,7 +153,7 @@ const LETTERED = /\b(signs?|signboards?|posters?|banners?|billboards?|newspapers
 export const unletter = (s) => s.replace(LETTERED, (w) => `wordless ${w}`).replace(/\bwordless wordless\b/gi, 'wordless');
 
 // Words the safety filter tends to flag; the soft retry drops them.
-const HEAVY = /\b(blood\w*|bleed\w*|wound\w*|injur\w*|hurt\w*|fight\w*|punch\w*|weapons?|guns?|knife|knives|fire|burn\w*|smok\w*|drunk|beer|wine|bar|naked|shirtless|bath\w*|bed|kiss\w*|cry\w*|cries|cried|tears?|sobb\w*|alone|lonely|dark\w*|storm\w*|hospital|funeral|death|dead|dying|grave|crash\w*|fall\w*|fell|struggl\w*|despair\w*|anger|angry|scream\w*|shout\w*|rage)\b/gi;
+const HEAVY = /\b(bats?|baseball|clubs?|smash\w*|hit|hits|hitting|throw\w*|threw|bang\w*|whack\w*|blood\w*|bleed\w*|wound\w*|injur\w*|hurt\w*|fight\w*|punch\w*|weapons?|guns?|knife|knives|fire|burn\w*|smok\w*|drunk|beer|wine|bar|naked|shirtless|bath\w*|bed|kiss\w*|cry\w*|cries|cried|tears?|sobb\w*|alone|lonely|dark\w*|storm\w*|hospital|funeral|death|dead|dying|grave|crash\w*|fall\w*|fell|struggl\w*|despair\w*|anger|angry|scream\w*|shout\w*|rage)\b/gi;
 export const soften = (s) =>
   s.replace(HEAVY, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.])/g, '$1').replace(/,(\s*,)+/g, ',').replace(/^[\s,]+/, '').trim();
 
