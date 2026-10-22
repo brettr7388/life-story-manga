@@ -12,6 +12,7 @@ export const QUESTIONS = [
   { id: 'turn', label: 'A moment that changed everything', max: 160 },
   { id: 'proud', label: 'Something you are proud of', max: 160 },
   { id: 'next', label: 'What comes next for you?', max: 160 },
+  { id: 'look', label: 'No photos? Describe how you look instead (optional with photos)', max: 200, optional: true },
 ];
 
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -22,7 +23,7 @@ export function parseAnswers(body) {
   const answers = {};
   for (const q of QUESTIONS) {
     const v = clean(body[q.id], q.max);
-    if (!v) return { error: `Please answer: ${q.label}` };
+    if (!v && !q.optional) return { error: `Please answer: ${q.label}` };
     answers[q.id] = v;
   }
   return { answers };
@@ -83,7 +84,8 @@ Use the person's real details. Do not invent tragedies they did not mention. Kee
 "title" is a 2 to 5 word manga title. Reply with JSON only.`;
 
 export function userPrompt(a) {
-  return `Name: ${a.name}\nWhere they grew up: ${a.roots}\nA moment that changed everything: ${a.turn}\nProud of: ${a.proud}\nWhat comes next: ${a.next}`;
+  return `Name: ${a.name}\nWhere they grew up: ${a.roots}\nA moment that changed everything: ${a.turn}\nProud of: ${a.proud}\nWhat comes next: ${a.next}` +
+    (a.look ? `\nWhat they look like: ${a.look}` : '');
 }
 
 const trim = (s, max) => clean(s, max);
@@ -159,19 +161,24 @@ export const soften = (s) =>
 
 // The art prompt sent to FLUX.2 [klein]. `refs` is how many reference photos came with the request.
 // `speak` is the panel (0-2) where the hero speaks; `soft` is the gentler wording used to retry a flagged page.
-export function artPrompt(scene, refs, { speak = -1, soft = false } = {}) {
+export function artPrompt(scene, refs, { speak = -1, soft = false, look = '' } = {}) {
   const who = refs > 1 ? `the person shown in reference images 0 to ${refs - 1}` : 'the person shown in reference image 0';
+  const hero = refs > 0
+    ? [`The hero is ${who}: keep the same face, head shape, hair and any glasses or facial hair, drawn as a manga character.`,
+      look ? `The hero looks like this: ${look}.` : '',
+      'Only the hero comes from the reference images. Every other person is a different individual who looks clearly unlike',
+      'the hero, with their own face, age, build, hair and clothes as described, never a copy of the hero.']
+    : [`The hero looks like this, the same on every panel: ${look}.`,
+      'Every other character looks clearly unlike the hero, with their own face, age, build, hair and clothes as described.'];
   const panels = scene.map((s) => unletter(soft ? soften(s) : s).replace(/[^.!?]$/, '$&.'));
   return [
     'A silent, wordless black-and-white manga page told only in pictures, classic shonen/seinen style,',
     'bold clean ink lines, screentone shading, high contrast, pure monochrome, no color at all.',
     `The page is exactly ${panels.length} full-width horizontal panels stacked from top to bottom, equal height,`,
     'thick black borders, white gutters. Every panel is fully drawn from border to border; no empty or blank panels, no extra panels.',
-    `The hero is ${who}: keep the same face, head shape, hair and any glasses or facial hair, drawn as a manga character.`,
-    'Only the hero comes from the reference images. Every other person is a different individual who looks clearly unlike',
-    'the hero, with their own face, age, build, hair and clothes as described, never a copy of the hero.',
+    ...hero,
     soft ? 'A gentle, wholesome, all-ages slice-of-life scene. Everyone is fully clothed, calm and hopeful.' : '',
-    ...panels.map((s, i) => `Panel ${i + 1} (${['top', 'middle', 'bottom'][i] ?? 'next'}): ${s}${i === speak ? " The hero's mouth is open mid-sentence." : ''}`),
+    ...panels.map((s, i) => `Panel ${i + 1} (${['top', 'middle', 'bottom'][i] ?? 'next'}): ${s}${i === speak ? " The hero's mouth is open mid-sentence, with open background beside the hero's head." : ''}`),
     'Pictures only: nothing is written anywhere on the page, no lettering, no page number, no title, no signature.',
     'Shop fronts, book covers, papers, screens and clothes show only simple shapes and patterns. Plain white paper margins.',
   ].filter(Boolean).join(' ');

@@ -56,9 +56,9 @@ async function start(request, env) {
   const run = crypto.randomUUID();
   await openRun(env.DB, run, day);
   const pages = await Promise.all(
-    script.pages.map(async (p, i) => ({ ...p, sig: await signPage(env.SIGNING_KEY, run, i, JSON.stringify(p.panels)) })),
+    script.pages.map(async (p, i) => ({ ...p, sig: await signPage(env.SIGNING_KEY, run, i, scene(JSON.stringify(p.panels), answers.look)) })),
   );
-  return json({ run, title: script.title, pages });
+  return json({ run, title: script.title, look: answers.look, pages });
 }
 
 async function page(request, env) {
@@ -68,7 +68,8 @@ async function page(request, env) {
   const index = Number(form.get('page'));
   const panelsRaw = String(form.get('panels') ?? '');
   if (!/^[0-9a-f-]{36}$/.test(run) || !Number.isInteger(index) || index < 0 || index >= PAGES) return json({ error: 'Bad page.' }, 400);
-  if (!(await verifyPage(env.SIGNING_KEY, run, index, panelsRaw, form.get('sig')))) return json({ error: 'That page was not written here.' }, 403);
+  const look = String(form.get('look') ?? '');
+  if (!(await verifyPage(env.SIGNING_KEY, run, index, scene(panelsRaw, look), form.get('sig')))) return json({ error: 'That page was not written here.' }, 403);
 
   const photos = [];
   for (let i = 0; i < MAX_PHOTOS; i++) {
@@ -79,7 +80,7 @@ async function page(request, env) {
     if (!size || size.width >= 512 || size.height >= 512) return json({ error: 'Photos must be JPEGs under 512x512.' }, 400);
     photos.push(f);
   }
-  if (!photos.length) return json({ error: 'Add at least one photo.' }, 400);
+  if (!photos.length && !look) return json({ error: 'Add at least one photo, or describe how you look.' }, 400);
 
   if (!(await takeDraw(env.DB, run))) return json({ error: 'This manga has used all its drawings.', code: 'draws' }, 429);
 
@@ -92,7 +93,7 @@ async function page(request, env) {
   let soft = false;
   for (;;) {
     try {
-      const image = await drawPage(env.AI, artPrompt(panels, photos.length, { speak, soft }), photos, soft ? seed + 7919 : seed);
+      const image = await drawPage(env.AI, artPrompt(panels, photos.length, { speak, soft, look }), photos, soft ? seed + 7919 : seed);
       if (soft) console.log('image soft retry ok', index);
       return json({ page: index, image, retried: soft });
     } catch (e) {
@@ -105,6 +106,9 @@ async function page(request, env) {
   }
   return json({ error: 'The artist smudged this page. Tap to redraw.' }, 502);
 }
+
+// What a page signature covers: the panels and the look, both of which go into the art prompt.
+const scene = (panelsRaw, look) => (look ? `${panelsRaw}\nlook:${look}` : panelsRaw);
 
 const isFlagged = (message) => /\b3030\b|flagged/i.test(message);
 

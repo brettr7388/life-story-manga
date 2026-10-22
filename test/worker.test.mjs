@@ -74,8 +74,9 @@ after(() => mf?.dispose());
 
 const start = (body = answers) => worker.fetch(`${BASE}/api/start`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const aiCalls = async () => (await fake.fetch('http://fake/calls')).json();
-function pageForm(run, i, p, files = [small]) {
+function pageForm(run, i, p, files = [small], look = '') {
   const fd = new FormData();
+  if (look) fd.append('look', look);
   fd.append('run', run);
   fd.append('page', String(i));
   fd.append('panels', JSON.stringify(p.panels));
@@ -169,6 +170,27 @@ test('a flagged page is retried once with a softer prompt, and the retry is take
   assert.equal((await spent.json()).code, 'draws');
   assert.equal((await aiCalls()).length, 1);
   await fake.fetch('http://fake/flag?n=0');
+  await db.prepare('UPDATE usage SET n = 2').run();
+});
+
+test('with no photos, a described look draws the page, and the look is signed', async () => {
+  const db = await mf.getD1Database('DB', 'main');
+  await db.prepare('UPDATE usage SET n = 0').run();
+  const look = 'a tall wooden log with big round eyes, thin arms and bare feet';
+  const r = await start({ ...answers, look });
+  const s = await r.json();
+  assert.equal(s.look, look);
+  await aiCalls();
+  const ok = await drawPage(pageForm(s.run, 0, s.pages[0], [], look));
+  assert.equal(ok.status, 200);
+  const [call] = await aiCalls();
+  assert.equal(call.refs, 0);
+  assert.match(call.prompt, /The hero looks like this, the same on every panel: a tall wooden log/);
+  assert.doesNotMatch(call.prompt, /reference image/);
+  assert.equal((await drawPage(pageForm(s.run, 0, s.pages[0], [], 'someone else entirely'))).status, 403, 'the look cannot be swapped');
+  assert.equal((await drawPage(pageForm(s.run, 0, s.pages[0], []))).status, 403, 'nor dropped');
+  const plain = await (await start()).json();
+  assert.equal((await drawPage(pageForm(plain.run, 0, plain.pages[0], []))).status, 400, 'no photos and no look');
   await db.prepare('UPDATE usage SET n = 2').run();
 });
 

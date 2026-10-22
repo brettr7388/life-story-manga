@@ -23,6 +23,13 @@ test('parseScript accepts JSON text or objects and trims to six pages', () => {
   assert.equal(parseScript('nope', 'Sam'), null);
 });
 
+test('the look answer is optional and goes to the script model when given', () => {
+  const base = { name: 'Sam', roots: 'r', turn: 't', proud: 'p', next: 'n' };
+  assert.equal(parseAnswers(base).answers.look, '');
+  assert.equal(parseAnswers({ ...base, look: 'a wooden log' }).answers.look, 'a wooden log');
+  assert.match(artPrompt(['x'], 1, { look: 'a wooden log' }), /reference image 0.*The hero looks like this: a wooden log\./);
+});
+
 test('parseAnswers strips control characters and caps length', () => {
   const { answers } = parseAnswers({ name: 'Sam\u0000\n', roots: 'x'.repeat(500), turn: 't', proud: 'p', next: 'n' });
   assert.equal(answers.name, 'Sam');
@@ -54,7 +61,7 @@ test('speech is tied to a panel: speechPanel 1-3 becomes an index, clamped, defa
   const at = (v) => parseScript({ title: 'T', pages: Array(6).fill(mk(v)) }, 'Sam').pages[0].speechPanel;
   assert.deepEqual([at(1), at(2), at(3), at(9), at(0), at(undefined)], [0, 1, 2, 2, 0, 2]);
   const spoken = artPrompt(['x', 'y', 'z'], 1, { speak: 1 });
-  assert.match(spoken, /Panel 2 \(middle\): y\. The hero's mouth is open mid-sentence\./);
+  assert.match(spoken, /Panel 2 \(middle\): y\. The hero's mouth is open mid-sentence, with open background beside the hero's head\./);
   assert.doesNotMatch(artPrompt(['x', 'y', 'z'], 1), /mid-sentence/);
   // These phrasings drew speech bubbles and empty white panels into the art; they must not come back.
   assert.doesNotMatch(spoken, /talking here|empty sky|upper right|completely blank|speech bubble|Japanese/i);

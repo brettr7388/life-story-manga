@@ -11,7 +11,6 @@ import { join } from 'node:path';
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:8799';
 const OUT = process.env.OUT ?? 'out';
 const PHOTOS = (process.env.PHOTOS ?? '').split(',').filter(Boolean);
-if (!PHOTOS.length) throw new Error('Set PHOTOS to one to four stand-in photo paths');
 const ANSWERS = process.env.ANSWERS_FILE ? JSON.parse(readFileSync(process.env.ANSWERS_FILE, 'utf8')) : {
   name: 'Theo',
   roots: 'A windy harbor town where my dad fixed fishing boats and I drew comics on receipt paper',
@@ -19,6 +18,7 @@ const ANSWERS = process.env.ANSWERS_FILE ? JSON.parse(readFileSync(process.env.A
   proud: 'Opening a tiny print shop that teaches kids to make their own zines',
   next: 'Taking the shop on the road in an old ferry-blue van',
 };
+if (!PHOTOS.length && !ANSWERS.look) throw new Error('Set PHOTOS to one to four stand-in photo paths, or give a "look" answer');
 mkdirSync(OUT, { recursive: true });
 const shot = (page, name) => page.screenshot({ path: join(OUT, name) });
 const log = [];
@@ -64,8 +64,10 @@ for (const p of ['/audio/music.mp3', '/audio/turn.mp3']) {
 }
 const before = await page.evaluate(() => window.__audio());
 
-await page.setInputFiles('#photo-input', PHOTOS);
-await page.waitForFunction((n) => document.querySelectorAll('.thumb').length === n, PHOTOS.length);
+if (PHOTOS.length) {
+  await page.setInputFiles('#photo-input', PHOTOS);
+  await page.waitForFunction((n) => document.querySelectorAll('.thumb').length === n, PHOTOS.length);
+}
 for (const [id, v] of Object.entries(ANSWERS)) await page.fill(`textarea[name=${id}]`, v);
 await page.evaluate(() => window.scrollTo(0, 0));
 await shot(page, '02-form-filled.png');

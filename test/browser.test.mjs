@@ -144,3 +144,19 @@ test('the sound button scrolls away with the form instead of covering it', { tim
     }
   } finally { await browser.close(); }
 });
+
+test('no photos: a described look is enough to make a manga, and neither is a form error', { timeout: 120_000 }, async () => {
+  const s = await server({});
+  const browser = await chromium.launch();
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage();
+  try {
+    await page.goto(s.url, { waitUntil: 'networkidle' });
+    for (const t of await page.$$('textarea:not([name=look])')) await t.fill('A small coastal town');
+    await page.tap('#go');
+    assert.match(await page.textContent('#form-error'), /describe how you look/);
+    await page.fill('textarea[name=look]', 'a tall wooden log with big round eyes');
+    await page.tap('#go');
+    await settled(page);
+    assert.deepEqual(await states(page), Array(6).fill('done'));
+  } finally { await browser.close(); }
+});

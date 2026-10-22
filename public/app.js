@@ -47,7 +47,8 @@ function buildQuestions(questions) {
     ta.name = q.id;
     ta.maxLength = q.max;
     ta.rows = q.id === 'name' ? 1 : 2;
-    ta.required = true;
+    ta.required = !q.optional;
+    if (q.optional) label.classList.add('optional');
     box.append(label);
   }
 }
@@ -104,9 +105,11 @@ $('form').addEventListener('submit', async (e) => {
   e.preventDefault();
   startMusic(); // inside the tap, before any await
   formError('');
-  if (!photos.length) return formError('Add at least one photo of yourself.');
+  if (!photos.length && !$('form').querySelector('textarea[name=look]')?.value.trim()) {
+    return formError('Add at least one photo of yourself, or describe how you look in the last box.');
+  }
   const answers = Object.fromEntries([...$('form').querySelectorAll('textarea')].map((t) => [t.name, t.value.trim()]));
-  const missing = [...$('form').querySelectorAll('textarea')].find((t) => !t.value.trim());
+  const missing = [...$('form').querySelectorAll('textarea')].find((t) => t.required && !t.value.trim());
   if (missing) { missing.focus(); return formError('Answer all five questions.'); }
   $('go').disabled = true;
   openReader();
@@ -197,6 +200,7 @@ async function drawOne(i) {
   fd.append('panels', JSON.stringify(p.panels));
   fd.append('sig', p.sig);
   fd.append('speak', String(p.speechPanel ?? 2));
+  if (story.look) fd.append('look', story.look);
   photos.forEach((ph, k) => fd.append(`photo${k}`, ph.blob, `photo${k}.jpg`));
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(new DOMException('This page took too long. Tap to redraw.', 'TimeoutError')), DRAW_TIMEOUT_MS);

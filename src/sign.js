@@ -1,4 +1,4 @@
-// HMAC-SHA256 over each page's art prompt, so /api/page only draws prompts this Worker wrote.
+// HMAC-SHA256 over each page's art prompt (its panels, plus the hero's described look), so /api/page only draws prompts this Worker wrote.
 // The key is the SIGNING_KEY secret (set with `wrangler secret put SIGNING_KEY`), never in the repo.
 const enc = new TextEncoder();
 
