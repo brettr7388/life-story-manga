@@ -6,7 +6,10 @@
 // the cap makes us refuse first, with a clear message, instead of failing halfway through a story.
 export const DEFAULT_DAILY_CAP = 8;
 export const PAGES = 6;
-export const MAX_DRAWS = PAGES + 3; // each manga may redraw up to 3 failed pages
+// 14 = 6 pages + 8 redraws or soft retries. Raised from 9 (6 + 3) for the Tung Tung Tung Sahur demo, whose
+// pages the image filter flags (3030) about half the time; see README "Daily cap". Worst case is about
+// 112 + 14 x 114 = 1,700 neurons per manga.
+export const MAX_DRAWS = PAGES + 8;
 
 export const utcDay = (now = Date.now()) => new Date(now).toISOString().slice(0, 10);
 

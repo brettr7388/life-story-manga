@@ -133,9 +133,9 @@ test('a manga: script, six signed pages, photos go to the image model as referen
   assert.deepEqual(await aiCalls(), [], 'refused requests never reach the model');
 });
 
-test('each manga gets at most 9 drawings (6 pages + 3 redraws)', async () => {
+test('each manga gets at most 14 drawings (6 pages + 8 redraws)', async () => {
   const s = await (await start()).json();
-  for (let k = 0; k < 9; k++) assert.equal((await drawPage(pageForm(s.run, k % 6, s.pages[k % 6]))).status, 200);
+  for (let k = 0; k < 14; k++) assert.equal((await drawPage(pageForm(s.run, k % 6, s.pages[k % 6]))).status, 200);
   const r = await drawPage(pageForm(s.run, 0, s.pages[0]));
   assert.equal(r.status, 429);
   assert.equal((await r.json()).code, 'draws');
@@ -163,10 +163,10 @@ test('a flagged page is retried once with a softer prompt, and the retry is take
   assert.equal((await aiCalls()).length, 2);
   assert.equal((await db.prepare('SELECT draws FROM runs WHERE id = ?1').bind(s.run).first()).draws, 4);
 
-  await db.prepare('UPDATE runs SET draws = 8 WHERE id = ?1').bind(s.run).run();
+  await db.prepare('UPDATE runs SET draws = 13 WHERE id = ?1').bind(s.run).run();
   await fake.fetch('http://fake/flag?n=1');
   const spent = await drawPage(pageForm(s.run, 4, s.pages[4]));
-  assert.equal(spent.status, 429, 'no retry past the budget of 9');
+  assert.equal(spent.status, 429, 'no retry past the budget of 14');
   assert.equal((await spent.json()).code, 'draws');
   assert.equal((await aiCalls()).length, 1);
   await fake.fetch('http://fake/flag?n=0');

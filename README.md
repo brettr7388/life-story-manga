@@ -30,7 +30,14 @@ It is one Cloudflare Worker on the free plan:
 
 `DAILY_CAP` in `wrangler.toml` is **8 mangas per UTC day**. When it is reached, `/api/start` answers 429
 before calling any model, and the page says to come back after midnight UTC. Each manga may draw at most
-9 drawings (6 pages plus 3 spare).
+14 drawings (6 pages plus 8 spare, used by redraws and by the automatic soft retry of a flagged page).
+
+**Demo setting, Oct 21 2026:** the budget was 9 (6 + 3). It was raised to 14 for the Tung Tung Tung Sahur
+demo, because the image filter flags (3030) about half of that character's pages and each flagged page costs
+two drawings (first try + soft retry). The daily cap stays at 8. Worst case is now about 1,700 neurons per
+manga (112 + 14 x 114), so 8 worst-case mangas would pass the free 10,000; typical mangas with real photos
+use about 800. **Set `MAX_DRAWS` back to `PAGES + 3` (9) after the demo**: for ordinary photo runs, where
+3030s are rare, 9 is enough and keeps 8 mangas a day safely inside the free plan.
 
 When the image model's safety filter flags a page (error 3030), the Worker retries it once on its own with
 softer wording and a new seed. That retry is a drawing and comes out of the same 9. A page that still fails,
@@ -45,7 +52,7 @@ live Worker (Cloudflare's AI analytics, Oct 21 2026):
 | One page: 768x1024 with 2 reference photos on FLUX.2 [klein] 4B | 114 neurons |
 | One manga: script + 6 pages | about 800 neurons |
 
-8 mangas use about 6,400 neurons, which leaves room for redraws (up to 3 per manga, about 340 more) and
+8 mangas use about 6,400 neurons, which leaves room for redraws (with the normal budget of 9, up to 3 per manga, about 340 more) and
 anything else on the account. On the free plan, going past 10,000 makes the models refuse; the cap makes the
 app refuse first, cleanly, before a story is half drawn. Raise the cap only on a paid plan, where each manga
 costs about $0.009.
