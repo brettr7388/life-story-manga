@@ -241,6 +241,7 @@ async function drawOne(i) {
     const btn = el.querySelector('.redraw');
     btn.hidden = false;
     if (err?.code === 'draws') { btn.textContent = 'This manga has used all its drawings.'; btn.disabled = true; }
+    if (err?.code === 'quota') { btn.textContent = 'The artist is out of ink for today. Come back after midnight UTC.'; btn.disabled = true; }
   } finally {
     clearTimeout(timer);
   }

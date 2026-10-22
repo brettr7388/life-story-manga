@@ -101,6 +101,7 @@ async function page(request, env) {
     } catch (e) {
       const message = String(e?.message ?? e);
       console.log('image model error', index, soft ? 'soft' : 'first', message);
+      if (isQuota(message)) return json({ error: 'The artist is out of ink for today. Come back after midnight UTC.', code: 'quota' }, 429);
       if (soft || !isFlagged(message)) break;
       if (!(await takeDraw(env.DB, run))) return json({ error: 'This manga has used all its drawings.', code: 'draws' }, 429);
       soft = true;
@@ -113,6 +114,8 @@ async function page(request, env) {
 const scene = (panelsRaw, look) => (look ? `${panelsRaw}\nlook:${look}` : panelsRaw);
 
 const isFlagged = (message) => /\b3030\b|flagged/i.test(message);
+// 4006: the account's free daily neurons are used up. Redrawing cannot help until the UTC day resets.
+const isQuota = (message) => /\b4006\b|daily free allocation/i.test(message);
 
 export default {
   async fetch(request, env) {

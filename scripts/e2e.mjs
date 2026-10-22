@@ -49,6 +49,8 @@ if (HEADED) {
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+// The script the Worker wrote (plot, captions, speech, art panels), saved next to the shots for review.
+page.on('response', async (r) => { if (r.url().endsWith('/api/start') && r.ok()) writeFileSync(join(OUT, 'script.json'), JSON.stringify(await r.json().catch(() => null), null, 1)); });
 
 await page.goto(BASE, { waitUntil: 'networkidle' });
 await page.waitForSelector('textarea');

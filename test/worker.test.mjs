@@ -10,7 +10,7 @@ const FAKE_AI = `
 import { WorkerEntrypoint } from 'cloudflare:workers';
 const calls = [];
 let failText = false;
-let flags = 0; // the next N image calls throw the model's 3030 "flagged" error
+let flags = 0, quota = false; // the next N image calls throw the model's 3030 "flagged" error
 const page = (n) => ({ panels: ['Panel one of ' + n, 'Panel two of ' + n, 'Panel three of ' + n], caption: 'Caption ' + n, speech: 'This is line number ' + n });
 export class AI extends WorkerEntrypoint {
   async run(model, input) {
@@ -22,6 +22,7 @@ export class AI extends WorkerEntrypoint {
     const form = await new Response(input.multipart.body, { headers: { 'content-type': input.multipart.contentType } }).formData();
     const refs = [0, 1, 2, 3].filter((i) => form.get('input_image_' + i)).length;
     calls.push({ model, refs, prompt: form.get('prompt'), width: form.get('width'), height: form.get('height'), seed: form.get('seed') });
+    if (quota) throw new Error('4006: you have used up your daily free allocation of 10,000 neurons');
     if (flags > 0) { flags--; throw new Error('3030: Your output has been flagged. Please choose another prompt / input image combination'); }
     return { image: 'AAAA' };
   }
@@ -30,6 +31,7 @@ export default {
   async fetch(req) {
     const u = new URL(req.url);
     if (u.pathname === '/flag') { flags = Number(u.searchParams.get('n')); return new Response('ok'); }
+    if (u.pathname === '/quota') { quota = u.searchParams.get('on') === '1'; return new Response('ok'); }
     if (u.pathname === '/fail-text') { failText = u.searchParams.get('on') === '1'; return new Response('ok'); }
     return Response.json(calls.splice(0));
   },
@@ -170,6 +172,20 @@ test('a flagged page is retried once with a softer prompt, and the retry is take
   assert.equal((await spent.json()).code, 'draws');
   assert.equal((await aiCalls()).length, 1);
   await fake.fetch('http://fake/flag?n=0');
+  await db.prepare('UPDATE usage SET n = 2').run();
+});
+
+test('when the account is out of free neurons (4006) the page says so and is not soft-retried', async () => {
+  const db = await mf.getD1Database('DB', 'main');
+  await db.prepare('UPDATE usage SET n = 0').run();
+  const s = await (await start()).json();
+  await aiCalls();
+  await fake.fetch('http://fake/quota?on=1');
+  const r = await drawPage(pageForm(s.run, 0, s.pages[0]));
+  await fake.fetch('http://fake/quota?on=0');
+  assert.equal(r.status, 429);
+  assert.equal((await r.json()).code, 'quota');
+  assert.equal((await aiCalls()).length, 1, 'no soft retry');
   await db.prepare('UPDATE usage SET n = 2').run();
 });
 

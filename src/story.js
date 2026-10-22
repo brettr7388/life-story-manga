@@ -176,7 +176,7 @@ export function artText(text, name) {
 // The bubble goes on a panel that shows the speaker's face. Keeps the model's choice when it does; otherwise picks
 // the panel that names the speaker (a face or close-up first), never a hands-only close-up.
 export function speakerPanel(panels, speaker, chosen) {
-  const term = speaker === 'the hero' ? /\bthe hero\b/i : new RegExp(`\\b${escapeRe(speaker.split(/\s+/)[0])}`, 'i');
+  const term = speaker === 'the hero' ? /\bthe hero\b/i : new RegExp(`\\b${escapeRe(speaker.split(/\s+/)[0])}\\b`);
   const handsOnly = (t) => /\b(hands?|feet|fingers)\b/i.test(t) && !/\b(face|eyes|grin|smil\w*|mouth)\b/i.test(t);
   const score = (t) => (term.test(t) ? 2 : 0) + (/\b(face|close-up|medium shot)\b/i.test(t) ? 1 : 0) - (handsOnly(t) ? 3 : 0);
   if (panels[chosen] && score(panels[chosen]) >= 2) return chosen;
@@ -196,7 +196,7 @@ export function artPanels(page, script) {
     if (i === 0 && script.setting) parts.unshift(`Setting: ${script.setting.replace(/[^.!?]$/, '$&.')}`);
     for (const c of script.cast) {
       const first = c.name.split(/\s+/)[0];
-      const named = new RegExp(`\\b${escapeRe(c.name)}\\b`, 'i').test(text) || (first.length > 3 && new RegExp(`\\b${escapeRe(first)}\\b`, 'i').test(text));
+      const named = new RegExp(`\\b${escapeRe(c.name)}\\b`, 'i').test(text) || (first.length > 3 && new RegExp(`\\b${escapeRe(first)}\\b`).test(text));
       if (named || (i === page.speechPanel && page.speaker === c.name)) parts.push(`${c.name} is ${c.look.replace(/[.!?]$/, '')}.`);
     }
     if (i === page.speechPanel && page.speech) {

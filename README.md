@@ -36,7 +36,9 @@ before calling any model, and the page says to come back after midnight UTC. Eac
 demo, because the image filter flags (3030) about half of that character's pages and each flagged page costs
 two drawings (first try + soft retry). The daily cap stays at 8. Worst case is now about 1,700 neurons per
 manga (112 + 14 x 114), so 8 worst-case mangas would pass the free 10,000; typical mangas with real photos
-use about 800. **Set `MAX_DRAWS` back to `PAGES + 3` (9) after the demo**: for ordinary photo runs, where
+use about 800. On Oct 21 2026 (UTC day Oct 22) the account did run out after 7 mangas plus off-app probes: once the free
+neurons are gone the model answers 4006, and the page now says "out of ink for today" instead of offering redraws.
+**Set `MAX_DRAWS` back to `PAGES + 3` (9) after the demo**: for ordinary photo runs, where
 3030s are rare, 9 is enough and keeps 8 mangas a day safely inside the free plan.
 
 When the image model's safety filter flags a page (error 3030), the Worker retries it once on its own with

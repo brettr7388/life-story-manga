@@ -76,6 +76,8 @@ test('art panels carry the setting, each cast look, and who is talking', () => {
   assert.match(a, /^Setting: A snowy mountain village with wooden cabins\. Wide shot/);
   assert.match(b, /Sari is a little girl in a pink coat with pigtails\. Sari is in this panel, talking, mouth open\./);
   assert.doesNotMatch(c, /Setting|Sari|talking/);
+  const elder = { ...script, cast: [{ name: 'Village Elder', look: 'a tall woman with gray hair' }] };
+  assert.doesNotMatch(artPanels({ ...page, speaker: 'the hero', speechPanel: 2 }, elder)[0], /Village Elder is/, '"village square" is not the Village Elder');
   // These phrasings drew speech bubbles and empty white panels into the art; they must not come back.
   const p = artPrompt([a, b, c], 0, { look: 'a log' });
   assert.doesNotMatch(p, /talking here|empty sky|upper right|completely blank|speech bubble|Japanese|beside the hero's head/i);
