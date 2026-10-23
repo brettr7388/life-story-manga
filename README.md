@@ -30,15 +30,15 @@ It is one Cloudflare Worker on the free plan:
 
 `DAILY_CAP` in `wrangler.toml` is **8 mangas per UTC day**. When it is reached, `/api/start` answers 429
 before calling any model, and the page says to come back after midnight UTC. Each manga may draw at most
-14 drawings (6 pages plus 8 spare, used by redraws and by the automatic soft retry of a flagged page).
+9 drawings (6 pages plus 3 spare, used by redraws and by the automatic soft retry of a flagged page).
 
-**Demo setting, Oct 21 2026:** the budget was 9 (6 + 3). It was raised to 14 for the Tung Tung Tung Sahur
+**Demo setting, Oct 21-22 2026 (now over):** the budget was raised from 9 (6 + 3) to 14 for the Tung Tung Tung Sahur
 demo, because the image filter flags (3030) about half of that character's pages and each flagged page costs
-two drawings (first try + soft retry). The daily cap stays at 8. Worst case is now about 1,700 neurons per
+two drawings (first try + soft retry). The daily cap stayed at 8. Worst case was about 1,700 neurons per
 manga (112 + 14 x 114), so 8 worst-case mangas would pass the free 10,000; typical mangas with real photos
 use about 800. On Oct 21 2026 (UTC day Oct 22) the account did run out after 7 mangas plus off-app probes: once the free
 neurons are gone the model answers 4006, and the page now says "out of ink for today" instead of offering redraws.
-**Set `MAX_DRAWS` back to `PAGES + 3` (9) after the demo**: for ordinary photo runs, where
+`MAX_DRAWS` is back to `PAGES + 3` (9) after the demo: for ordinary photo runs, where
 3030s are rare, 9 is enough and keeps 8 mangas a day safely inside the free plan.
 
 When the image model's safety filter flags a page (error 3030), the Worker retries it once on its own with

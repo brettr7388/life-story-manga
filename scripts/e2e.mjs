@@ -95,7 +95,7 @@ const pageTimes = {};
 const settled = () => page.waitForFunction(() => (window.__manga().states || []).every((s) => s === 'done' || s === 'failed'), null, { timeout: 300_000, polling: 250 }).catch(() => {});
 await settled();
 // A page the model failed on gets a "Tap to redraw" button, as a person would use it (up to REDRAW_ROUNDS rounds, default 6;
-// the Worker's per-manga budget of 14 drawings is the real limit).
+// the Worker's per-manga budget of 9 drawings is the real limit).
 let redraws = 0;
 for (let round = 0; round < Number(process.env.REDRAW_ROUNDS ?? 6); round++) {
   const failed = await page.evaluate(() => window.__manga().states.map((s, i) => (s === 'failed' ? i : -1)).filter((i) => i >= 0));
