@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { jpegSize } from '../src/jpeg.js';
-import { parseScript, parseAnswers, artPrompt, artPanels, artText, speakerPanel, speechOk, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
+import { parseScript, parseAnswers, artPrompt, artPanels, artText, speakerPanel, heroInFrame, speechOk, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
 import { signPage, verifyPage } from '../src/sign.js';
 import { dailyCap, DEFAULT_DAILY_CAP } from '../src/limits.js';
 
@@ -126,4 +126,11 @@ test('the art prompt fights lettering and the soft retry drops heavy words', () 
   assert.match(artPrompt(['x'], 1), /Only the hero comes from the reference images/);
   assert.equal(soften('The hero, crying, hugs a friend.'), 'The hero, hugs a friend.');
   assert.doesNotMatch(soften('The hero swings his baseball bat and bangs on a door'), /bat|bang/);
+});
+
+test("a hands-only close-up of the hero also shows the hero's face, so the look still applies", () => {
+  assert.equal(heroInFrame("Close-up of the hero's hands gripping a saw on a log"), "Close-up of the hero's face and hands gripping a saw on a log");
+  assert.equal(heroInFrame("Close-up of the hero's face, grinning"), "Close-up of the hero's face, grinning");
+  const art = artPanels({ panels: ['Wide shot of the village', 'Medium shot of the hero', "Close-up of the hero's hands sawing a branch"], speechPanel: 1, speaker: 'the hero', speech: 'Hold it steady!' }, { setting: '', cast: [] });
+  assert.match(art[2], /the hero's face and hands sawing/);
 });

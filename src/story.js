@@ -177,12 +177,20 @@ export function artText(text, name) {
 // the panel that names the speaker (a face or close-up first), never a hands-only close-up.
 export function speakerPanel(panels, speaker, chosen) {
   const term = speaker === 'the hero' ? /\bthe hero\b/i : new RegExp(`\\b${escapeRe(speaker.split(/\s+/)[0])}\\b`);
-  const handsOnly = (t) => /\b(hands?|feet|fingers)\b/i.test(t) && !/\b(face|eyes|grin|smil\w*|mouth)\b/i.test(t);
   const score = (t) => (term.test(t) ? 2 : 0) + (/\b(face|close-up|medium shot)\b/i.test(t) ? 1 : 0) - (handsOnly(t) ? 3 : 0);
   if (panels[chosen] && score(panels[chosen]) >= 2) return chosen;
   let best = chosen;
   panels.forEach((t, k) => { if (score(t) > score(panels[best] ?? '')) best = k; });
   return best;
+}
+
+const handsOnly = (t) => /\b(hands?|feet|fingers)\b/i.test(t) && !/\b(face|eyes|grin|smil\w*|mouth)\b/i.test(t);
+
+// A close-up of only the hero's hands loses the look (a log hero came out as human hands), so the hero's face
+// is pulled into the frame too.
+export function heroInFrame(text) {
+  if (!handsOnly(text)) return text;
+  return text.replace(/\bthe hero's (hands?|fingers|feet)\b/i, "the hero's face and $1");
 }
 
 function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -192,7 +200,7 @@ function escapeRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 // draws the same world and the same faces, and the bubble's speaker is really in its panel.
 export function artPanels(page, script) {
   return page.panels.map((text, i) => {
-    const parts = [text.replace(/[^.!?]$/, '$&.')];
+    const parts = [heroInFrame(text).replace(/[^.!?]$/, '$&.')];
     if (i === 0 && script.setting) parts.unshift(`Setting: ${script.setting.replace(/[^.!?]$/, '$&.')}`);
     for (const c of script.cast) {
       const first = c.name.split(/\s+/)[0];
