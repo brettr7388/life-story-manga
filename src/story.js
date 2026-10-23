@@ -218,10 +218,18 @@ export function artPanels(page, script) {
 const OFF_VOICE = /\b(you|your|yours|yourself|you're|you've|you'll|you'd|i|i'm|i've|i'll|my|me|myself|we|our|us)\b/i;
 // With a clear he/she, "they/their" in a caption is the model drifting into a vague voice.
 const THEY = /\b(they|their|theirs|them|themself|themselves)\b/i;
-// Speech that is real dialogue: every line at least 4 words, and no line repeated.
+// Generic cheers the prompt forbids; a line with one is redrafted like any other weak line.
+const CHEER = /\b(we did it|best day ever|let'?s go|feast time|just the beginning|let'?s (eat and )?celebrate|you saved the day|hooray|yay)\b/i;
+// Last resort for a cheer the model kept writing: drop the cheer and keep the rest when enough of it is left.
+export function uncheer(speech) {
+  const rest = speech.replace(new RegExp(`${CHEER.source}[,.!]*\\s*`, 'gi'), '').trim();
+  if (rest === speech || rest.split(/\s+/).length < 4) return speech;
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+// Speech that is real dialogue: every line at least 4 words, no generic cheer, and no line repeated.
 export const speechOk = (script) => {
   const lines = script.pages.map((p) => p.speech.toLowerCase().replace(/[^a-z' ]/g, '').trim());
-  return lines.every((l) => l.split(/\s+/).length >= 4) && new Set(lines).size === lines.length;
+  return lines.every((l) => l.split(/\s+/).length >= 4 && !CHEER.test(l)) && new Set(lines).size === lines.length;
 };
 
 // A caption about a group ("the kids and Theo ... their zines") may say "their"; only a solo caption may not.
@@ -252,7 +260,7 @@ export async function writeScript(ai, answers) {
     if (voiceOk(script) && speechOk(script)) return script;
     if (!fallback || voiceOk(script)) fallback = script;
   }
-  if (fallback) fallback.pages.forEach((p) => { p.caption = toThirdPerson(p.caption, answers.name); });
+  if (fallback) fallback.pages.forEach((p) => { p.caption = toThirdPerson(p.caption, answers.name); p.speech = uncheer(p.speech); });
   return fallback;
 }
 
@@ -265,9 +273,17 @@ const HEAVY = /\b(axes?|hatchets?|bats?|baseball|clubs?|smash\w*|hit|hits|hittin
 export const soften = (s) =>
   s.replace(HEAVY, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.])/g, '$1').replace(/,(\s*,)+/g, ',').replace(/^[\s,]+/, '').trim();
 
+// A described look with none of these words is not a person (a log, a cat, a robot). FLUX draws "the hero" holding a
+// tool, hugging or sitting at a table as a human boy, so such a hero gets the look and a "not a human" cue in every
+// panel that shows the hero, not only once at the top of the prompt.
+const PERSON = /\b(man|men|woman|women|boy|girl|person|guy|lady|kid|child|teen\w*|toddler|baby|grand(ma|pa|mother|father)|mom|mum|dad|father|mother|human|years? old|aged?)\b/i;
+export const creatureLook = (look) => Boolean(look) && !PERSON.test(look);
+const firstPhrase = (look) => look.split(/[,;.]/)[0].trim().replace(/^(i am|i'm)\s+/i, '').replace(/^(a|an)\s+/i, '');
+
 // The art prompt sent to FLUX.2 [klein]. `refs` is how many reference photos came with the request.
 // `scene` is the page's art panels (see artPanels); `soft` is the gentler wording used to retry a flagged page.
-export function artPrompt(scene, refs, { soft = false, look = '' } = {}) {
+export function artPrompt(scene, refs, { soft = false, look: rawLook = '' } = {}) {
+  const look = rawLook.replace(/[.!?\s]+$/, '');
   const who = refs > 1 ? `the person shown in reference images 0 to ${refs - 1}` : 'the person shown in reference image 0';
   const hero = refs > 0
     ? [`The hero is ${who}: keep the same face, head shape, hair and any glasses or facial hair, drawn as a manga character.`,
@@ -275,8 +291,13 @@ export function artPrompt(scene, refs, { soft = false, look = '' } = {}) {
       'Only the hero comes from the reference images. Every other person is a different individual who looks clearly unlike',
       'the hero, with their own face, age, build, hair and clothes as described, never a copy of the hero.']
     : [`The hero looks like this, the same on every panel: ${look}.`,
+      creatureLook(look) ? `The hero is not a human: wherever the hero appears, even holding a tool, hugging, sitting or in close-up, draw the hero as this ${firstPhrase(look)}, never as a man, boy or person.` : '',
       'Every other character looks clearly unlike the hero, with their own face, age, build, hair and clothes as described.'];
-  const panels = scene.map((s) => unletter(soft ? soften(s) : s).replace(/[^.!?]$/, '$&.'));
+  const creature = refs === 0 && creatureLook(look);
+  const panels = scene.map((s) => {
+    const text = unletter(soft ? soften(s) : s).replace(/[^.!?]$/, '$&.');
+    return creature && /\bthe hero\b/i.test(s) ? `${text} The hero here is ${look.charAt(0).toLowerCase()}${look.slice(1)}, not a human.` : text;
+  });
   return [
     'A silent, wordless black-and-white manga page told only in pictures, classic shonen/seinen style,',
     'bold clean ink lines, screentone shading, high contrast, pure monochrome, no color at all.',

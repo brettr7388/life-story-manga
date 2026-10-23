@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import { jpegSize } from '../src/jpeg.js';
-import { parseScript, parseAnswers, artPrompt, artPanels, artText, speakerPanel, heroInFrame, speechOk, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
+import { parseScript, parseAnswers, artPrompt, artPanels, artText, speakerPanel, heroInFrame, speechOk, uncheer, voiceOk, toThirdPerson, unletter, soften } from '../src/story.js';
 import { signPage, verifyPage } from '../src/sign.js';
 import { dailyCap, DEFAULT_DAILY_CAP } from '../src/limits.js';
 
@@ -133,4 +133,27 @@ test("a hands-only close-up of the hero also shows the hero's face, so the look 
   assert.equal(heroInFrame("Close-up of the hero's face, grinning"), "Close-up of the hero's face, grinning");
   const art = artPanels({ panels: ['Wide shot of the village', 'Medium shot of the hero', "Close-up of the hero's hands sawing a branch"], speechPanel: 1, speaker: 'the hero', speech: 'Hold it steady!' }, { setting: '', cast: [] });
   assert.match(art[2], /the hero's face and hands sawing/);
+});
+
+test('a non-human described hero is named as that creature, not a human, in every panel that shows the hero', () => {
+  const look = 'A tall brown wooden log with a round carved face, skinny arms and legs, wearing a red knitted scarf.';
+  const p = artPrompt(["Medium shot of Grandma hugging the hero", 'Wide shot of the empty village square', "Close-up of the hero's face and hands holding a saw"], 0, { look });
+  assert.match(p, /never as a man, boy or person/);
+  assert.match(p, /Panel 1 \(top\): [^]*?The hero here is a tall brown wooden log with a round carved face, skinny arms and legs, wearing a red knitted scarf, not a human\. Panel 2/);
+  assert.match(p, /Panel 2 \(middle\): Wide shot of the empty village square\. Panel 3/);
+  assert.match(p, /Panel 3 \(bottom\): [^]*?saw\. The hero here is a tall brown wooden log/);
+  assert.doesNotMatch(p, /scarf\.\./);
+  for (const human of ['A tall woman with gray hair and glasses', 'Small boy in a blue parka', 'a 40 years old guy with a beard']) {
+    assert.doesNotMatch(artPrompt(['Medium shot of the hero'], 0, { look: human }), /not a human/, human);
+  }
+  assert.doesNotMatch(artPrompt(['Medium shot of the hero'], 1, { look }), /The hero here is/, 'photos lead the look');
+});
+
+test('generic cheers fail the speech check, and a last-resort script keeps only the real part of the line', () => {
+  const mk = (lines) => ({ pages: lines.map((speech) => ({ speech })) });
+  const good = ['Sari, hold that end steady!', 'Why is everyone staring at me?', 'Grab the small branches first.', 'Just one more log to go!', 'Thank you all for helping today.', 'Pass the soup down here, Grandpa!'];
+  assert.equal(speechOk(mk([...good.slice(0, 3), "We did it, Tung, we're saving the feast!", ...good.slice(4)])), false);
+  assert.equal(uncheer("We did it, Tung, we're saving the feast!"), "Tung, we're saving the feast!");
+  assert.equal(uncheer("Let's eat and celebrate!"), "Let's eat and celebrate!", 'too little left, the line stays');
+  assert.equal(uncheer('Hold that end steady, Kaito!'), 'Hold that end steady, Kaito!');
 });
