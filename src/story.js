@@ -219,11 +219,12 @@ const OFF_VOICE = /\b(you|your|yours|yourself|you're|you've|you'll|you'd|i|i'm|i
 // With a clear he/she, "they/their" in a caption is the model drifting into a vague voice.
 const THEY = /\b(they|their|theirs|them|themself|themselves)\b/i;
 // Generic cheers the prompt forbids; a line with one is redrafted like any other weak line.
-const CHEER = /\b(we did it|best day ever|let'?s go|feast time|just the beginning|let'?s (eat and )?celebrate|you saved the day|hooray|yay)\b/i;
-// Last resort for a cheer the model kept writing: drop the cheer and keep the rest when enough of it is left.
+const CHEER = /\b(we did it|best day ever|let'?s go|feast time|just the beginning|let'?s (eat and )?celebrate|you saved the day|best \w+ ever|hooray|yay)\b/i;
+// Last resort for a cheer the model kept writing: drop the cheer and keep the rest, or show no bubble when too little is left.
 export function uncheer(speech) {
   const rest = speech.replace(new RegExp(`${CHEER.source}[,.!]*\\s*`, 'gi'), '').trim();
-  if (rest === speech || rest.split(/\s+/).length < 4) return speech;
+  if (rest === speech) return speech;
+  if (rest.split(/\s+/).length < 4) return '';
   return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 // Speech that is real dialogue: every line at least 4 words, no generic cheer, and no line repeated.

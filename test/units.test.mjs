@@ -154,6 +154,7 @@ test('generic cheers fail the speech check, and a last-resort script keeps only 
   const good = ['Sari, hold that end steady!', 'Why is everyone staring at me?', 'Grab the small branches first.', 'Just one more log to go!', 'Thank you all for helping today.', 'Pass the soup down here, Grandpa!'];
   assert.equal(speechOk(mk([...good.slice(0, 3), "We did it, Tung, we're saving the feast!", ...good.slice(4)])), false);
   assert.equal(uncheer("We did it, Tung, we're saving the feast!"), "Tung, we're saving the feast!");
-  assert.equal(uncheer("Let's eat and celebrate!"), "Let's eat and celebrate!", 'too little left, the line stays');
+  assert.equal(uncheer('We did it, Tung!'), '', 'a bare cheer becomes no bubble at all');
+  assert.equal(uncheer('This is the best feast ever!'), '');
   assert.equal(uncheer('Hold that end steady, Kaito!'), 'Hold that end steady, Kaito!');
 });
